@@ -12,21 +12,29 @@ class PointCloudEncoder(nn.Module):
         self.conv4 = nn.Conv1d(256, 1024, 1)
         self.fc = nn.Linear(1024, emb_dim)
 
-    def forward(self, xyz): 
+    def forward(self, xyzs): 
         """
         Args:
             xyz: (B, 3, N)
+            xyzs = (B, num_views, 3, N)
         """
-        nump = xyz.size()[2]
-        x = F.relu(self.conv1(xyz))
-        x = F.relu(self.conv2(x))
-        global_feat = F.adaptive_max_pool1d(x, 1)
-        x = torch.cat((x, global_feat.repeat(1, 1, nump)), dim=1)
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = torch.squeeze(F.adaptive_max_pool1d(x, 1), dim=2)
-        embedding = self.fc(x)
-        return embedding
+        print('xyzs shape' , xyzs.shape)
+        all_embeddings = torch.empty((xyzs.shape[0],1))
+        for i, xyz in enumerate(xyzs):
+            print(i)
+            nump = xyzs.size()[2]
+            x = F.relu(self.conv1(xyz))
+            x = F.relu(self.conv2(x))
+            global_feat = F.adaptive_max_pool1d(x, 1)
+            x = torch.cat((x, global_feat.repeat(1, 1, nump)), dim=1)
+            x = F.relu(self.conv3(x))
+            x = F.relu(self.conv4(x))
+            x = torch.squeeze(F.adaptive_max_pool1d(x, 1), dim=2)
+            embedding = self.fc(x)
+            all_embeddings.append(embedding)
+        
+        avg_embedding = all_embeddings.mean()
+        return avg_embedding
 
 
 class PointCloudDecoder(nn.Module):
@@ -56,10 +64,11 @@ class PointCloudAE(nn.Module):
         self.encoder = PointCloudEncoder(emb_dim)
         self.decoder = PointCloudDecoder(emb_dim, n_pts)
 
-    def forward(self, in_pc, emb=None):
+    def forward(self, in_pcs, emb=None):
         """
         Args:
             in_pc: (B, N, 3)
+            in_pcs: (B, num_views, N, 3)
             emb: (B, 512)
 
         Returns:
@@ -68,7 +77,9 @@ class PointCloudAE(nn.Module):
 
         """
         if emb is None:
-            xyz = in_pc.permute(0, 2, 1)
-            emb = self.encoder(xyz)
+            print('xyzs before', in_pcs.shape)
+            xyzs = in_pcs.permute(0, 2, 1)
+            print('xyzs after', xyzs.shape)
+            emb = self.encoder(xyzs)
         out_pc = self.decoder(emb)
         return emb, out_pc

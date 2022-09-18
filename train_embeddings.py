@@ -9,7 +9,8 @@ from models import PointCloudEncoder, PointCloudAE
 import argparse
 import time
 import numpy as np
-from pytorch3d.loss import chamfer_distance
+#from pytorch3d.loss import chamfer_distance
+from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
 
@@ -33,7 +34,7 @@ class Trainer():
                  lr,
                  load_model,
                  results_dir,
-                 batch_size
+                 batch_size,
                 ):
         self.epochs = epochs
         self.device = device
@@ -41,39 +42,54 @@ class Trainer():
         self.load_model = load_model
         self.results_dir = results_dir
         self.batch_size = batch_size
+        self.device = device
 
     def train(self, model, train_dataloader, eval_dataloader):
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
         batch_idx = 0
         for epoch in range(self.epochs):
             model.train()
-            for i, data in enumerate(train_dataloader):
-                print(i)
-                inputs = data
-                batch_colors = inputs['colors']
-                batch_depths = inputs['depths']
-                print('gts',np.shape(inputs['gt_pc']))
+            for batch, data in enumerate(train_dataloader):
+                print(batch)
+                xyzs = []
+                batch_colors = data['colors']
+                batch_depths = data['depths']
+                #for point_cloud in batch_depths:
+                #    point_cloud = point_cloud.float()
+                #    point_cloud = point_cloud.to(self.device)
+                #    embedding, pc_out = model(point_cloud)
+                #    loss= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                #    print(loss)
+                #    loss.backward()
+                #    optimizer.step() 
+                #    batch_idx += 1
+                #    if batch_idx % 100 == 0:
+                #        print(f"Batch {batch_idx} Loss:{loss}")
                 for point_cloud in batch_depths:
-                    
-                    point_cloud = point_cloud.float()
-                    point_cloud = point_cloud.to(self.device)
-                    embedding, pc_out = model(point_cloud)
-                    loss, _ = chamfer_distance(pc_out, inputs['gt_pc'].permute(0,2,1))
-                    print(loss)
-                    loss.backward()
-                    optimizer.step() 
+                    xyzs.append(point_cloud)
+                
+                xyzs = torch.cat(xyzs).to(self.device, dtype=torch.float)
+                print(xyzs.shape)
+                with torch.cuda.amp.autocast(enabled=True):
+                    embedding, pc_out = model(xyzs)
+                    loss= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                print(loss)
+                loss.backward()
+                optimizer.step() 
 
-                    batch_idx += 1
-                    if batch_idx % 100 == 0:
-                        print(f"Batch {batch_idx} Loss:{loss}")
+                batch_idx += 1
+                if batch_idx % 100 == 0:
+                    print(f"Batch {batch_idx} Loss:{loss}")
+
             print(f"Epoch {epoch} finished, evaluating ... ") 
             model.eval()
             val_loss = 0.0
             for i, data in enumerate(eval_dataloader, 1):
-                batch_xyz, batch_label = data
-                batch_xyz = batch_xyz[:, :, :3].cuda()
+                batch_colors = data['colors']
+                batch_depths = data['depths']
+                batch_xyz = batch_xyz[:, :, :3].to(self.device)
                 embedding, point_cloud = model(batch_xyz)
-                loss, _ = chamfer_distance(point_cloud, batch_xyz)
+                loss = chamfer_distance(point_cloud, batch_xyz)
                 val_loss += loss.item()
                 print('Batch {0} Loss:{1:f}'.format(i, loss))
             val_loss = val_loss / i
@@ -86,8 +102,7 @@ class Trainer():
 
 def main():
     opt = parser.parse_args() 
-    opt.device = 'mps'
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/Users/maturk/data/test', num_points=opt.num_points)
+    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
     test = dataset.__getitem__(4)
     train_split = int(0.80 * dataset.__len__())
 

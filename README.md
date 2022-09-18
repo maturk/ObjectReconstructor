@@ -1,3 +1,3 @@
 # ObjectReconstructor
 
-Blender based multi-view shape and appearance code auto-encoder trained on synthetic ShapeNet objects.
+Object centric shape and appearance code auto-encoder trained on synthetic ShapeNet models with Blender.

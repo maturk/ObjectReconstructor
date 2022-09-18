@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import open3d as o3d
 import torch.nn.functional as F
 
-device = torch.device("mps")
 
 class BlenderDataset(torch.utils.data.Dataset):
     def __init__(self, mode = 'train', save_directory  = '/Users/maturk/data/test', num_points = 100):
