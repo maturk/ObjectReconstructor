@@ -14,7 +14,7 @@ from torch.utils.data import random_split
 import open3d as o3d
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--num_points', type=int, default=50, help='number of points in point cloud')
+parser.add_argument('--num_points', type=int, default=100, help='number of points in point cloud')
 parser.add_argument('--emb_dim', type=int, default=128, help='dimension of latent embedding')
 parser.add_argument('--batch_size', type=int, default = 1, help='batch size')
 parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
@@ -33,7 +33,7 @@ class Trainer():
                  lr,
                  load_model,
                  results_dir,
-                 batch_size
+                 batch_size,
                 ):
         self.epochs = epochs
         self.device = device
@@ -41,6 +41,7 @@ class Trainer():
         self.load_model = load_model
         self.results_dir = results_dir
         self.batch_size = batch_size
+        self.device = device
 
     def train(self, model, train_dataloader, eval_dataloader):
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
@@ -58,7 +59,7 @@ class Trainer():
                     point_cloud = point_cloud.float()
                     point_cloud = point_cloud.to(self.device)
                     embedding, pc_out = model(point_cloud)
-                    loss, _ = chamfer_distance(pc_out, inputs['gt_pc'].permute(0,2,1))
+                    loss, _ = chamfer_distance(pc_out, inputs['gt_pc'].permute(0,2,1).to(self.device))
                     print(loss)
                     loss.backward()
                     optimizer.step() 

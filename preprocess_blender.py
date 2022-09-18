@@ -39,6 +39,7 @@ def update_camera(camera, focus_point=mathutils.Vector((0.0, 0.0, 0.0)), distanc
 
 # Setup
 shapenet_directory = '/Users/maturk/data/Shapenet/'
+save_directory = '/home/asl-student/mturkulainen/data/test'
 print('start')
 counter = 0
 
@@ -133,8 +134,8 @@ for folder in os.listdir(shapenet_directory):
                         bpy.data.objects['Camera'].location = pose
                         update_camera(bpy.data.objects['Camera'])
                         # Render color and depth
-                        render_file_path = os.path.abspath(f"/Users/maturk/data/test/{folder}/{object_dir}/{pose_num}_{texture_name}_color")
-                        depth_file_path = os.path.abspath(f"/Users/maturk/data/test/{folder}/{object_dir}/{pose_num}_{texture_name}_depth")
+                        render_file_path = os.path.abspath(f"{save_directory}/{folder}/{object_dir}/{pose_num}_{texture_name}_color")
+                        depth_file_path = os.path.abspath(f"{save_directory}/{folder}/{object_dir}/{pose_num}_{texture_name}_depth")
                         scene.render.filepath = render_file_path
                         depth_file_output.file_slots[0].path = depth_file_path + "_depth"
                         bpy.ops.render.render(write_still=True)  # render still
@@ -153,9 +154,9 @@ for folder in os.listdir(shapenet_directory):
                     bpy.data.objects['Camera'].location = pose
                     update_camera(bpy.data.objects['Camera'])
                     # Render color and depth
-                    render_file_path = os.path.abspath(f"/Users/maturk/data/test/{folder}/{object_dir}/{pose_num}_color")
+                    render_file_path = os.path.abspath(f"{save_directory}/{folder}/{object_dir}/{pose_num}_color")
                     scene.render.filepath = render_file_path
-                    depth_file_path = os.path.abspath(f"/Users/maturk/data/test/{folder}/{object_dir}/{pose_num}_depth")
+                    depth_file_path = os.path.abspath(f"{save_directory}/{folder}/{object_dir}/{pose_num}_depth")
                     depth_file_output.file_slots[0].path = depth_file_path + "_depth"
                     bpy.ops.render.render(write_still=True)  # render still
 
