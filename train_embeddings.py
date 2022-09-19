@@ -49,8 +49,8 @@ class Trainer():
         batch_idx = 0
         for epoch in range(self.epochs):
             model.train()
-            for batch, data in enumerate(train_dataloader):
-                print(batch)
+            for i, data in enumerate(train_dataloader):
+                print(i)
                 xyzs = []
                 batch_colors = data['colors']
                 batch_depths = data['depths']
@@ -62,18 +62,15 @@ class Trainer():
                 #    print(loss)
                 #    loss.backward()
                 #    optimizer.step() 
+
                 #    batch_idx += 1
                 #    if batch_idx % 100 == 0:
                 #        print(f"Batch {batch_idx} Loss:{loss}")
                 for point_cloud in batch_depths:
                     xyzs.append(point_cloud)
-                
-                xyzs = torch.cat(xyzs).to(self.device, dtype=torch.float)
-                print(xyzs.shape)
-                with torch.cuda.amp.autocast(enabled=True):
-                    embedding, pc_out = model(xyzs)
-                    loss= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
-                print(loss)
+                print(np.shape(xyzs))
+                embedding, pc_out = model(xyzs)
+                loss= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
                 loss.backward()
                 optimizer.step() 
 
