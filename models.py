@@ -5,6 +5,7 @@ import numpy as np
 
 class PointCloudEncoder(nn.Module):
     def __init__(self, emb_dim):
+        self.emb_dim = emb_dim
         super(PointCloudEncoder, self).__init__()
         self.conv1 = nn.Conv1d(3, 64, 1)
         self.conv2 = nn.Conv1d(64, 128, 1)
@@ -18,11 +19,9 @@ class PointCloudEncoder(nn.Module):
             xyz: (B, 3, N)
             xyzs = (B, num_views, 3, N)
         """
-        print('xyzs shape' , xyzs.shape)
-        all_embeddings = torch.empty((xyzs.shape[0],1))
-        for i, xyz in enumerate(xyzs):
-            print(i)
-            nump = xyzs.size()[2]
+        batch_embeddings = torch.empty((xyzs.shape[0], xyzs.shape[1], self.emb_dim)).to(xyzs.device)
+        for batch, xyz in enumerate(xyzs):
+            nump = xyz.size()[2]
             x = F.relu(self.conv1(xyz))
             x = F.relu(self.conv2(x))
             global_feat = F.adaptive_max_pool1d(x, 1)
@@ -31,10 +30,10 @@ class PointCloudEncoder(nn.Module):
             x = F.relu(self.conv4(x))
             x = torch.squeeze(F.adaptive_max_pool1d(x, 1), dim=2)
             embedding = self.fc(x)
-            all_embeddings.append(embedding)
+            batch_embeddings[batch][:]= embedding
         
-        avg_embedding = all_embeddings.mean()
-        return avg_embedding
+        avg_embeddings = batch_embeddings.mean(dim = 1)
+        return avg_embeddings
 
 
 class PointCloudDecoder(nn.Module):
@@ -54,7 +53,7 @@ class PointCloudDecoder(nn.Module):
         out = F.relu(self.fc1(embedding))
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
-        out_pc = out.view(bs, -1, 3)
+        out_pc = out.view(bs, -1, 3).float()
         return out_pc
 
 
@@ -77,9 +76,7 @@ class PointCloudAE(nn.Module):
 
         """
         if emb is None:
-            print('xyzs before', in_pcs.shape)
-            xyzs = in_pcs.permute(0, 2, 1)
-            print('xyzs after', xyzs.shape)
+            xyzs = in_pcs.permute(0, 1, 3, 2)   
             emb = self.encoder(xyzs)
         out_pc = self.decoder(emb)
         return emb, out_pc

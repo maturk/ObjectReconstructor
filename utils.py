@@ -193,7 +193,7 @@ class NOCSDataset(torch.utils.data.Dataset):
         }
                 
 
-def shapenet_pc_sample(shapenet_directory = '/Users/maturk/data/Shapenet/', save_directory = '/Users/maturk/data/test', sample_points = 100):
+def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet/', save_directory = '/home/maturk/data/test', sample_points = 2048):
     counter = 0
     for folder in os.listdir(shapenet_directory):
         if not folder.startswith('.'):
@@ -208,22 +208,21 @@ def shapenet_pc_sample(shapenet_directory = '/Users/maturk/data/Shapenet/', save
                     counter += 1
                 else:
                     continue
-                if counter == 5:
-                    break 
+
 
 
         
 
 if __name__ == "__main__":
-    dataset = BlenderDataset()
-    dataset.get_object_paths()
-    object = dataset.__getitem__(0)
+    #dataset = BlenderDataset()
+    #dataset.get_object_paths()
+    #object = dataset.__getitem__(0)
     #depths = object['depths']
     #depth = depths[0]
     #print(np.shape(depth))
-    pc_gt = object['gt_pc']
-    print(np.shape(pc_gt))
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
-    o3d.visualization.draw_geometries([pcd])
-    #shapenet_pc_sample()
+    #pc_gt = object['gt_pc']
+    #print(np.shape(pc_gt))
+    #pcd = o3d.geometry.PointCloud()
+    #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    #o3d.visualization.draw_geometries([pcd])
+    shapenet_pc_sample()
