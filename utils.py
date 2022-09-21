@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 
 class BlenderDataset(torch.utils.data.Dataset):
-    def __init__(self, mode = 'train', save_directory  = '/Users/maturk/data/test', num_points = 100):
+    def __init__(self, mode = 'train', save_directory  = '/Users/maturk/data/test', num_points = 1024):
         self.objects = []
         self.root_directory = save_directory
         self.mode = mode
@@ -48,6 +48,8 @@ class BlenderDataset(torch.utils.data.Dataset):
                 colors.append(color_img)
             except:
                 print('FAILED, dataset corrupted')
+                print('Object directory: ', object['object_dir'])
+                print('Class directory: ', object['class_dir'])
             
         gt_pc = np.asarray(o3d.io.read_point_cloud(object['gt_pc']).points, dtype = np.float32).transpose()
         return {
@@ -193,14 +195,15 @@ class NOCSDataset(torch.utils.data.Dataset):
         }
                 
 
-def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet/', save_directory = '/home/maturk/data/test', sample_points = 2048):
+def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data/Shapenet_small', save_directory = '/home/asl-student/mturkulainen/data/test', sample_points = 2048):
     counter = 0
-    for folder in os.listdir(shapenet_directory):
+    for folder in sorted(os.listdir(shapenet_directory))[0:1]:
         if not folder.startswith('.'):
             for object_dir in (os.listdir(os.path.join(shapenet_directory, folder))):
                 model_path = os.path.join(shapenet_directory, folder, object_dir, 'models')
                 models = glob.glob(os.path.join(model_path, '*.obj'))
                 if models != []:
+                    print(object_dir)
                     model = models[0]
                     mesh = o3d.io.read_triangle_mesh(model)
                     points = mesh.sample_points_uniformly(sample_points)
@@ -209,20 +212,22 @@ def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet/', save_
                 else:
                     continue
 
-
-
-        
+# Faulty files:
+# abe557fa1b9d59489c81f0389df0e98a
+# 194f4eb1707aaf674c8b72e8da0e65c5
+# 5979870763de5ced4c8b72e8da0e65c5
 
 if __name__ == "__main__":
-    #dataset = BlenderDataset()
-    #dataset.get_object_paths()
-    #object = dataset.__getitem__(0)
-    #depths = object['depths']
-    #depth = depths[0]
-    #print(np.shape(depth))
-    #pc_gt = object['gt_pc']
-    #print(np.shape(pc_gt))
-    #pcd = o3d.geometry.PointCloud()
-    #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
-    #o3d.visualization.draw_geometries([pcd])
-    shapenet_pc_sample()
+    dataset = BlenderDataset(save_directory  = '/home/asl-student/mturkulainen/data/test')
+    dataset.get_object_paths()
+    object = dataset.__getitem__(0)
+    depths = object['depths']
+    depth = depths[0]
+    print(depth)
+    
+    pc_gt = object['gt_pc']
+    print(np.shape(pc_gt))
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    o3d.visualization.draw_geometries([pcd])
+    #shapenet_pc_sample()
