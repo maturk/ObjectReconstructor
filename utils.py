@@ -24,6 +24,7 @@ class BlenderDataset(torch.utils.data.Dataset):
         object = self.objects[index]
         depths = []
         colors = []
+        masks = []
         for dmap, color in zip(object['depth_paths'][0:15], object['color_paths'][0:15]):
             try:
                 dmap_img = np.array(cv2.imread(dmap)[:,:,0], dtype=np.float32)
@@ -43,9 +44,11 @@ class BlenderDataset(torch.utils.data.Dataset):
                 x = (ymap - cam_cx) * z / cam_fx
                 y = (xmap - cam_cy) * z / cam_fy
                 cloud = np.concatenate((x, y, z), axis=1)
-                cloud = self.pc_down_sample(cloud, self.num_points)
+                cloud, idxs = self.pc_down_sample(cloud, self.num_points)
+                mask = idxs
                 depths.append(cloud)
                 colors.append(color_img)
+                masks.append(mask)
             except:
                 print('FAILED, dataset corrupted')
                 print('Object directory: ', object['object_dir'])
@@ -55,7 +58,8 @@ class BlenderDataset(torch.utils.data.Dataset):
         return {
             'colors' : colors,
             'depths' : depths,
-            'gt_pc'    : gt_pc
+            'gt_pc'  : gt_pc,
+            'masks'   : masks
         }
         
     def __len__(self):
@@ -106,10 +110,10 @@ class BlenderDataset(torch.utils.data.Dataset):
         xyz = pc
         num_xyz = pc.shape[0]
         assert num_xyz >= self.num_points, 'Not enough points in shape.'
-        idx = np.random.choice(num_xyz, self.num_points)
-        xyz = xyz[idx, :]
+        idxs = np.random.choice(num_xyz, self.num_points)
+        xyz = xyz[idxs, :]
         # To do : data augmentation and random noise
-        return xyz
+        return xyz, idxs
     
 
 
@@ -218,16 +222,27 @@ def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data
 # 5979870763de5ced4c8b72e8da0e65c5
 
 if __name__ == "__main__":
-    dataset = BlenderDataset(save_directory  = '/home/asl-student/mturkulainen/data/test')
-    dataset.get_object_paths()
+    dataset = BlenderDataset(save_directory  = '/home/maturk/data/test')
+    #dataset.get_object_paths()
     object = dataset.__getitem__(0)
     depths = object['depths']
     depth = depths[0]
-    print(depth)
+    img = object['colors'][1]/255
+    mask = object['masks'][1]
+    #for i in range(img.shape[0]):
+    #    for j in range(img.shape[1]):
+    #        if mask[i,j] == False:
+    #            img[i,j,:] = [0,0,0]  
     
-    pc_gt = object['gt_pc']
-    print(np.shape(pc_gt))
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
-    o3d.visualization.draw_geometries([pcd])
+    print(img.shape)
+
+    plt.imshow(img)
+    plt.show()
+    #print(depth)
+    
+    #pc_gt = object['gt_pc']
+    #print(np.shape(pc_gt))
+    #pcd = o3d.geometry.PointCloud()
+    #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    #o3d.visualization.draw_geometries([pcd])
     #shapenet_pc_sample()

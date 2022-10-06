@@ -179,5 +179,3 @@ for folder in os.listdir(shapenet_directory):
             #Call the operator only once
             bpy.ops.object.delete()
             
-            if counter == 5:
-                break 
