@@ -56,10 +56,12 @@ class BlenderDataset(torch.utils.data.Dataset):
             
         gt_pc = np.asarray(o3d.io.read_point_cloud(object['gt_pc']).points, dtype = np.float32).transpose()
         return {
-            'colors' : colors,
-            'depths' : depths,
-            'gt_pc'  : gt_pc,
-            'masks'   : masks
+            'colors' : torch.tensor(np.array(colors)),
+            'depths' : torch.tensor(np.array(depths)),
+            'gt_pc'  : torch.tensor(gt_pc),
+            'masks'   : torch.tensor(np.array(masks)),
+            'class_dir' : object['class_dir'],
+            'object_dir' : object['object_dir']
         }
         
     def __len__(self):
@@ -100,7 +102,7 @@ class BlenderDataset(torch.utils.data.Dataset):
         object_info = { 'object_number' : object_number,
             'color_paths' : color_paths,
             'depth_paths' : depth_paths,
-            'class_dir' : class_dir,
+            'class_dir' : int(class_dir),
             'object_dir' : object_dir,
             'gt_pc'     : gt_pc
         }
@@ -224,22 +226,26 @@ def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data
 if __name__ == "__main__":
     dataset = BlenderDataset(save_directory  = '/home/maturk/data/test')
     #dataset.get_object_paths()
-    object = dataset.__getitem__(0)
-    depths = object['depths']
-    depth = depths[0]
-    img = object['colors'][1]/255
-    mask = object['masks'][1]
-    #for i in range(img.shape[0]):
-    #    for j in range(img.shape[1]):
-    #        if mask[i,j] == False:
-    #            img[i,j,:] = [0,0,0]  
-    
-    print(img.shape)
+    objects = []
 
-    plt.imshow(img)
-    plt.show()
-    #print(depth)
-    
+    [objects.append(dataset.__getitem__(idx)) for idx in range(0,5)]
+    from pytorch_metric_learning import losses
+    contrastive_loss = losses.contrastive_loss.ContrastiveLoss()
+
+    tens = torch.rand(1,3)
+    tens2 = torch.rand(1,3)
+    print(tens,tens2)
+    embs = []
+    for i in range(0,5):
+        embs.append(tens)
+    #embs.append(tens2)
+    embs = torch.cat(embs, dim = 0)
+    print(embs.shape)
+    labels = [torch.tensor(int(objects[i]['class_dir'])) for i in range(0,5)]
+    labels = torch.tensor(labels)
+    print(labels)
+    loss = contrastive_loss(embs,labels)
+    print(loss)
     #pc_gt = object['gt_pc']
     #print(np.shape(pc_gt))
     #pcd = o3d.geometry.PointCloud()
