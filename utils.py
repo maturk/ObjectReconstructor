@@ -203,7 +203,7 @@ class NOCSDataset(torch.utils.data.Dataset):
 
 def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data/Shapenet_small', save_directory = '/home/asl-student/mturkulainen/data/test', sample_points = 2048):
     counter = 0
-    for folder in sorted(os.listdir(shapenet_directory))[0:1]:
+    for folder in sorted(os.listdir(shapenet_directory)):
         if not folder.startswith('.'):
             for object_dir in (os.listdir(os.path.join(shapenet_directory, folder))):
                 model_path = os.path.join(shapenet_directory, folder, object_dir, 'models')
@@ -222,33 +222,17 @@ def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data
 # abe557fa1b9d59489c81f0389df0e98a
 # 194f4eb1707aaf674c8b72e8da0e65c5
 # 5979870763de5ced4c8b72e8da0e65c5
+# b838c5bc5241a44bf2f2371022475a36
+# c50c72eefe225b51cb2a965e75be701c
+# 9d453384794bc58b9a06a7de97b096dc
 
 if __name__ == "__main__":
-    dataset = BlenderDataset(save_directory  = '/home/maturk/data/test')
+    #dataset = BlenderDataset(save_directory  = '/home/maturk/data/test')
     #dataset.get_object_paths()
-    objects = []
-
-    [objects.append(dataset.__getitem__(idx)) for idx in range(0,5)]
-    from pytorch_metric_learning import losses
-    contrastive_loss = losses.contrastive_loss.ContrastiveLoss()
-
-    tens = torch.rand(1,3)
-    tens2 = torch.rand(1,3)
-    print(tens,tens2)
-    embs = []
-    for i in range(0,5):
-        embs.append(tens)
-    #embs.append(tens2)
-    embs = torch.cat(embs, dim = 0)
-    print(embs.shape)
-    labels = [torch.tensor(int(objects[i]['class_dir'])) for i in range(0,5)]
-    labels = torch.tensor(labels)
-    print(labels)
-    loss = contrastive_loss(embs,labels)
-    print(loss)
+   
     #pc_gt = object['gt_pc']
     #print(np.shape(pc_gt))
     #pcd = o3d.geometry.PointCloud()
     #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
     #o3d.visualization.draw_geometries([pcd])
-    #shapenet_pc_sample()
+    shapenet_pc_sample()
