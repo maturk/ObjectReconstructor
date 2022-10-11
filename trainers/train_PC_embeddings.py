@@ -64,7 +64,7 @@ class Trainer():
 
                 with torch.cuda.amp.autocast(enabled=True):
                     embedding, pc_out = model(xyzs)
-                    chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                    chamfer_loss, _ = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
                     cont_loss = contrastive_loss(embedding,data['class_dir'])
                     loss = chamfer_loss.mean() + cont_loss
                 loss.backward()
@@ -88,7 +88,7 @@ class Trainer():
                 xyzs = torch.reshape(xyzs, (batch_nums, self.num_views - 1, self.num_points, 3))
                 with torch.cuda.amp.autocast(enabled=True):
                     embedding, pc_out = model(xyzs)
-                    loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                    loss, _= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
                 val_loss += loss.mean().item()
                 if i % 20 == 0:
                     print(f"Batch {i} Loss: {loss}")
@@ -112,7 +112,7 @@ class Trainer():
                 model.train()
                 with torch.cuda.amp.autocast(enabled=True):
                     embedding, pc_out = model(xyzs)
-                    loss = chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
+                    loss, _ = chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
                 loss.backward()
                 optimizer.step() 
                 scheduler.step()
@@ -122,7 +122,7 @@ class Trainer():
                 val_loss = 0.0
                 with torch.cuda.amp.autocast(enabled=True):
                     embedding, pc_out = model(xyzs)
-                    loss= chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
+                    loss, _= chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
                 val_loss += loss.item()
                 print(f"Epoch {epoch} test average loss: {val_loss}")
                 print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
