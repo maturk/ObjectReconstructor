@@ -85,38 +85,27 @@ class DenseFusion(nn.Module):
     def __init__(self, num_points, emb_dim = 512, num_obj=1):
         super(DenseFusion, self).__init__()
         self.num_points = num_points
+        self.emb_dim = emb_dim
         self.cnn = ModifiedResnet()
         self.feat = DenseFusionFeat(num_points, emb_dim=emb_dim)
 
     def forward(self, img, x, choose, obj):
-        out_img = self.cnn(img)
-        bs, di, _, _ = out_img.size()
-
-        emb = out_img.view(bs, di, -1)
-        choose = choose.repeat(1, di, 1)
-        emb = torch.gather(emb, 2, choose).contiguous()
-        x = x.transpose(2, 1).contiguous()
-        x, ap_x = self.feat(x, emb)
-        #for batch_idx, (colors, points, mask) in enumerate(zip(img,x,choose)):
-            #print('batch', batch_idx)
-            #print('points', points.shape)
-            #print('colors ', colors.shape)
-            #print('mask', mask.shape)
-
-            #print('smaller colors', colors[0].shape)
-            #out_img = self.cnn(colors[0].unsqueeze(0))
-            #bs, di, _, _ = out_img.size()
-            #print(bs, di)
-            #emb = out_img.view(bs, di, -1)
-            #print(emb.shape)
-            #choose = mask[0].repeat(1, di, 1)
-            #print('choose', choose.shape)
-            #print('mask ', mask[0].shape)
-            #emb = torch.gather(emb, 2, choose).contiguous()
-            #x = x.transpose(2, 1).contiguous()
-            #x, ap_x = self.feat(x, emb)
+        batch_x = torch.empty((x.shape[0], x.shape[1], self.emb_dim, self.num_points)).to(x.device)
+        batch_ap_x = torch.empty((x.shape[0], x.shape[1], self.emb_dim, 1)).to(x.device)
+        for batch_idx, (colors, points, mask) in enumerate(zip(img,x,choose)):
+            out_img = self.cnn(colors)
+            bs, di, _, _ = out_img.size()
+            emb = out_img.view(bs, di, -1)
+            choose = mask.unsqueeze(1).repeat(1, di, 1)
+            emb = torch.gather(emb, 2, choose).contiguous()
+            x = points.transpose(2, 1).contiguous()
+            x, ap_x = self.feat(x, emb)
+            batch_x[batch_idx][:]= x
+            batch_ap_x[batch_idx][:]= ap_x
         
-        return x, ap_x
+        avg_x = batch_x.mean(dim=1)
+        avg_ap_x = batch_ap_x.mean(dim=1)
+        return avg_x, avg_ap_x
 
 if __name__ == "__main__":
     from ObjectReconstructor.utils import BlenderDataset
