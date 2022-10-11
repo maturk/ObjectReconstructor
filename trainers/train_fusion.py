@@ -11,11 +11,13 @@ import numpy as np
 from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
+from pytorch_metric_learning import losses
+from matplotlib import pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_points', type=int, default=1024, help='number of points in point cloud')
 parser.add_argument('--emb_dim', type=int, default=512, help='dimension of latent embedding')
-parser.add_argument('--batch_size', type=int, default = 16, help='batch size')
+parser.add_argument('--batch_size', type=int, default = 1, help='batch size')
 parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
@@ -51,10 +53,11 @@ class Trainer():
         optimizer = torch.optim.Adam([{'params': encoder.parameters()}, 
                                     {'params': decoder.parameters(), 'lr': 1e-3}
                                     ], lr=self.lr)
-                    
+        contrastive_loss = losses.contrastive_loss.ContrastiveLoss()
         batch_idx = 0
         for epoch in range(self.epochs):
             encoder.train()
+            decoder.train()
             for i, data in enumerate(train_dataloader):
                 batch_depths = data['depths'][0].float().cuda()
                 batch_colors = data['colors'][0].float().cuda()
@@ -63,12 +66,38 @@ class Trainer():
                 batch_masks = batch_masks.type(torch.int64)
                 gt_pc = data['gt_pc'][0].float().cuda()
 
-                # Encode embeddings and decode to point cloud
+               # batch_depths = data['depths']
+               # batch_colors = data['colors']
+               # batch_masks = data['masks']
+               # gt_pc = data['gt_pc']
+               # xyzs = []
+               # colors = []
+               # masks = []
+               # for (color, point_cloud, mask) in zip(batch_colors, batch_depths, batch_depths):
+               #     xyzs.append(point_cloud)
+               #     colors.append(color.permute(0,3,1,2))
+               #     masks.append(mask)
+               # xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
+               # colors = torch.cat(colors).to(device = self.device , dtype = torch.float)
+               # masks = torch.cat(masks).to(device = self.device , dtype = torch.int64)
+               # batch_nums = int(xyzs.shape[0]/(self.num_views-1))
+               # xyzs = xyzs.view(batch_nums, self.num_views - 1, self.num_points, 3)
+               # colors = colors.view(batch_nums, self.num_views - 1, 3, colors.shape[2], colors.shape[3])
+               # masks = masks.view(batch_nums, self.num_views - 1, self.num_points, 3)
                 x, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
                 ap_x = ap_x.squeeze(-1)
-
                 pc_out = decoder(embedding = ap_x)
-                loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                # Encode embeddings and decode to point cloud
+                #print(np.shape(colors), np.shape(xyzs), np.shape(masks))
+                #x, ap_x = encoder(colors, xyzs, masks, torch.Tensor([1]).long().cuda())
+                #print(ap_x.shape)
+                #ap_x = ap_x.squeeze(-1)
+                #print(ap_x.shape)
+                #pc_out = decoder(embedding = ap_x)
+                #loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                cont_loss = contrastive_loss(ap_x,data['class_dir'])
+                loss = chamfer_loss.mean() + cont_loss
                 loss.backward()
                 optimizer.step() 
 
