@@ -1,14 +1,19 @@
-from xmlrpc.client import INVALID_XMLRPC
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import os
+import sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+print(os.path.dirname(SCRIPT_DIR))
+sys.path.append(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+
 from ObjectReconstructor.utils import BlenderDataset
 from ObjectReconstructor.models.models import PointCloudDecoder
 from ObjectReconstructor.models.denseFusion import DenseFusion
 import argparse
 import numpy as np
-#from pytorch3d.loss import chamfer_distance
-from kaolin.metrics.pointcloud import chamfer_distance
+from pytorch3d.loss import chamfer_distance
+#from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
 from pytorch_metric_learning import losses
@@ -22,7 +27,8 @@ parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
-parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/ae', help='directory to save train results')
+parser.add_argument('--result_dir', type=str, default='/home/asl-student/mturkulainen/git/ObjectReconstructor/results/ae', help='directory to save train results')
+parser.add_argument('--save_dir', type=str, default='/home/asl-student/mturkulainen/data/test', help='directory to save train results')
 parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
 parser.add_argument('--workers', '-w', type=int, default=1)
 parser.add_argument('--num_views', type=int, default=16, help = 'Number of input views per object instance')
@@ -59,48 +65,37 @@ class Trainer():
             encoder.train()
             decoder.train()
             for i, data in enumerate(train_dataloader):
-                batch_depths = data['depths'][0].float().cuda()
-                batch_colors = data['colors'][0].float().cuda()
-                batch_colors = batch_colors.permute(0,3,1,2)
-                batch_masks = data['masks'][0].unsqueeze(0).float().cuda()
-                batch_masks = batch_masks.type(torch.int64)
-                gt_pc = data['gt_pc'][0].float().cuda()
-
-               # batch_depths = data['depths']
-               # batch_colors = data['colors']
-               # batch_masks = data['masks']
-               # gt_pc = data['gt_pc']
-               # xyzs = []
-               # colors = []
-               # masks = []
-               # for (color, point_cloud, mask) in zip(batch_colors, batch_depths, batch_depths):
-               #     xyzs.append(point_cloud)
-               #     colors.append(color.permute(0,3,1,2))
-               #     masks.append(mask)
-               # xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
-               # colors = torch.cat(colors).to(device = self.device , dtype = torch.float)
-               # masks = torch.cat(masks).to(device = self.device , dtype = torch.int64)
-               # batch_nums = int(xyzs.shape[0]/(self.num_views-1))
-               # xyzs = xyzs.view(batch_nums, self.num_views - 1, self.num_points, 3)
-               # colors = colors.view(batch_nums, self.num_views - 1, 3, colors.shape[2], colors.shape[3])
-               # masks = masks.view(batch_nums, self.num_views - 1, self.num_points, 3)
-                x, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
+                batch_depths = data['depths']
+                batch_colors = data['colors']
+                batch_masks = data['masks']
+                gt_pc = data['gt_pc']
+                xyzs = []
+                colors = []
+                masks = []
+                for (color, point_cloud, mask) in zip(batch_colors, batch_depths, batch_masks):
+                    xyzs.append(point_cloud)
+                    colors.append(color.permute(0,3,1,2))
+                    masks.append(mask)
+                xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
+                colors = torch.cat(colors).to(device = self.device , dtype = torch.float)
+                masks = torch.cat(masks).to(device = self.device , dtype = torch.int64)
+                batch_nums = int(xyzs.shape[0]/(self.num_views-1))
+                xyzs = xyzs.view(batch_nums, self.num_views - 1, self.num_points, 3)
+                colors = colors.view(batch_nums, self.num_views - 1, 3, colors.shape[2], colors.shape[3])
+                masks = masks.view(batch_nums, self.num_views - 1, self.num_points)
+                
+                # Encode embeddings and decode to point cloud
+                x, ap_x = encoder(colors, xyzs, masks, torch.Tensor([1]).long().cuda())
                 ap_x = ap_x.squeeze(-1)
                 pc_out = decoder(embedding = ap_x)
-                # Encode embeddings and decode to point cloud
-                #print(np.shape(colors), np.shape(xyzs), np.shape(masks))
-                #x, ap_x = encoder(colors, xyzs, masks, torch.Tensor([1]).long().cuda())
-                #print(ap_x.shape)
-                #ap_x = ap_x.squeeze(-1)
-                #print(ap_x.shape)
-                #pc_out = decoder(embedding = ap_x)
-                #loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
-                chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+
+                # Compute loss
+                chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))[0]
                 cont_loss = contrastive_loss(ap_x,data['class_dir'])
-                loss = chamfer_loss.mean() + cont_loss
+                loss = chamfer_loss + cont_loss
                 loss.backward()
                 optimizer.step() 
-
+                
                 batch_idx += 1
                 if batch_idx % 10 == 0:
                     print(f"Batch {batch_idx} Loss:{loss}")
@@ -110,18 +105,34 @@ class Trainer():
             decoder.eval()
             val_loss = 0.0
             for i, data in enumerate(eval_dataloader, 1):
-                batch_depths = torch.tensor(object['depths'][0]).float().unsqueeze(0).cuda()
-                batch_colors = torch.tensor(object['colors'][0]).float().unsqueeze(0).cuda()
-                batch_colors = batch_colors.permute(0,3,1,2)
-                batch_masks = torch.tensor(object['masks'][0]).unsqueeze(0).float().cuda()
-                batch_masks = batch_masks.type(torch.int64)
-                gt_pc = torch.tensor(object['gt_pc']).float().unsqueeze(0).cuda()
+                batch_depths = data['depths']
+                batch_colors = data['colors']
+                batch_masks = data['masks']
+                gt_pc = data['gt_pc']
+                xyzs = []
+                colors = []
+                masks = []
+                for (color, point_cloud, mask) in zip(batch_colors, batch_depths, batch_masks):
+                    xyzs.append(point_cloud)
+                    colors.append(color.permute(0,3,1,2))
+                    masks.append(mask)
+                xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
+                colors = torch.cat(colors).to(device = self.device , dtype = torch.float)
+                masks = torch.cat(masks).to(device = self.device , dtype = torch.int64)
+                batch_nums = int(xyzs.shape[0]/(self.num_views-1))
+                xyzs = xyzs.view(batch_nums, self.num_views - 1, self.num_points, 3)
+                colors = colors.view(batch_nums, self.num_views - 1, 3, colors.shape[2], colors.shape[3])
+                masks = masks.view(batch_nums, self.num_views - 1, self.num_points)
 
-                x, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
+                # Encode embeddings and decode to point cloud
+                x, ap_x = encoder(colors, xyzs, masks, torch.Tensor([1]).long().cuda())
                 ap_x = ap_x.squeeze(-1)
                 pc_out = decoder(embedding = ap_x)
 
-                loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
+                chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))[0]
+                cont_loss = contrastive_loss(ap_x,data['class_dir'])
+                loss = chamfer_loss + cont_loss
+
                 val_loss += loss.item()
                 if i % 20 == 0:
                     print(f"Batch {i} Loss: {loss}")
@@ -129,7 +140,7 @@ class Trainer():
             print(f"Epoch {epoch} test average loss: {val_loss}")
             print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
             # save model after each epoch
-            if epoch % 100 == 0:
+            if epoch % 1 == 0:
                 torch.save(encoder.state_dict(), f"{self.results_dir}/full_fusion_encoder_{self.num_views}_{self.num_points}_{epoch}.pth")
                 torch.save(decoder.state_dict(), f"{self.results_dir}/full_fusion_decoder_{self.num_views}_{self.num_points}_{epoch}.pth")
             
@@ -178,19 +189,20 @@ class Trainer():
 
 def main():
     opt = parser.parse_args() 
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
+    dataset = BlenderDataset(mode = 'train', save_directory  = opt.save_dir, num_points=opt.num_points)
     train_split = int(0.80 * dataset.__len__())
 
     train_dataset, eval_dataset = random_split(dataset, [train_split, dataset.__len__()-train_split])
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
                                                    batch_size=opt.batch_size,
                                                    num_workers=opt.workers,
-                                                   shuffle = True)
+                                                   shuffle = True,
+                                                   pin_memory=True)
     eval_dataloader = torch.utils.data.DataLoader(eval_dataset,
                                                    batch_size=opt.batch_size,
                                                    num_workers=opt.workers,
                                                    shuffle = False)
-    encoder = DenseFusion(num_points = opt.num_points).to(opt.device)
+    encoder = DenseFusion(num_points = opt.num_points, emb_dim = opt.emb_dim).to(opt.device)
     decoder = PointCloudDecoder(emb_dim=opt.emb_dim, n_pts=opt.num_points).to(opt.device)
 
     trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
