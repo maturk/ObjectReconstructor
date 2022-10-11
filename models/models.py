@@ -22,7 +22,7 @@ class PointCloudEncoder(nn.Module):
         Args:
             xyz: (B, 3, N)
             xyzs = (B, num_views, 3, N)
-        """
+        """     
         batch_embeddings = torch.empty((xyzs.shape[0], xyzs.shape[1], self.emb_dim)).to(xyzs.device)
         for batch, xyz in enumerate(xyzs):
             nump = xyz.size()[2]
@@ -85,13 +85,4 @@ class PointCloudAE(nn.Module):
         out_pc = self.decoder(emb)
         return emb, out_pc
 
-class DenseFusion (nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.cnn = resnet18(pretrained=True).eval()
-        self.extractor = feature_extraction.create_feature_extractor(
-            self.model, return_nodes={'classifier.2': 'features'})
-
-    def forward(self, x):
-        pass
 
