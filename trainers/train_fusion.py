@@ -22,16 +22,16 @@ from matplotlib import pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_points', type=int, default=1024, help='number of points in point cloud')
 parser.add_argument('--emb_dim', type=int, default=512, help='dimension of latent embedding')
-parser.add_argument('--batch_size', type=int, default = 1, help='batch size')
+parser.add_argument('--batch_size', type=int, default = 5, help='batch size')
 parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
 parser.add_argument('--result_dir', type=str, default='/home/asl-student/mturkulainen/git/ObjectReconstructor/results/ae', help='directory to save train results')
-parser.add_argument('--save_dir', type=str, default='/home/asl-student/mturkulainen/data/test', help='directory to save train results')
+parser.add_argument('--save_dir', type=str, default='/home/asl-student/mturkulainen/data/test2', help='save directory of preprocessed shapenet images')
 parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
 parser.add_argument('--workers', '-w', type=int, default=1)
-parser.add_argument('--num_views', type=int, default=16, help = 'Number of input views per object instance')
+parser.add_argument('--num_views', type=int, default=10, help = 'Number of input views per object instance')
 
 
 class Trainer():
@@ -54,6 +54,7 @@ class Trainer():
         self.device = device
         self.num_views = num_views
         self.num_points = num_points
+        self.clip = 5
 
     def train(self, encoder, decoder, train_dataloader, eval_dataloader):
         optimizer = torch.optim.Adam([{'params': encoder.parameters()}, 
@@ -65,10 +66,10 @@ class Trainer():
             encoder.train()
             decoder.train()
             for i, data in enumerate(train_dataloader):
-                batch_depths = data['depths']
-                batch_colors = data['colors']
-                batch_masks = data['masks']
-                gt_pc = data['gt_pc']
+                batch_depths = torch.Tensor(data['depths'])
+                batch_colors = torch.Tensor(data['colors'])
+                batch_masks = torch.Tensor(data['masks'])
+                gt_pc = torch.Tensor(data['gt_pc'])
                 xyzs = []
                 colors = []
                 masks = []
@@ -92,13 +93,15 @@ class Trainer():
                 # Compute loss
                 chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))[0]
                 cont_loss = contrastive_loss(ap_x,data['class_dir'])
-                loss = chamfer_loss + cont_loss
+                loss = chamfer_loss + 0.2*cont_loss
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm = self.clip)
+                torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm = self.clip)
                 optimizer.step() 
-                
+
                 batch_idx += 1
                 if batch_idx % 10 == 0:
-                    print(f"Batch {batch_idx} Loss:{loss}")
+                    print(f"Batch {batch_idx} Loss:{loss} chamfer_loss:{chamfer_loss} contrastive_loss:{cont_loss}")
 
             print(f"Epoch {epoch} finished, evaluating ... ") 
             encoder.eval()
@@ -214,17 +217,17 @@ def test():
     opt = parser.parse_args() 
     encoder = DenseFusion(num_points = opt.num_points).to(opt.device)
     decoder = PointCloudDecoder(emb_dim=opt.emb_dim, n_pts=opt.num_points).to(opt.device)
-    encoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'fusion_encoder_16_1024_600.pth')))
-    decoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'fusion_decoder_16_1024_600.pth')))
+    encoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'full_fusion_encoder_16_1024_0.pth')))
+    decoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'full_fusion_decoder_16_1024_0.pth')))
 
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
-    object = dataset.__getitem__(50)
-    depths = torch.tensor(object['depths'][0]).float().unsqueeze(0).cuda()
-    colors = torch.tensor(object['colors'][0]).float().unsqueeze(0).cuda()
-    colors = colors.permute(0,3,1,2)
-    masks = torch.tensor(object['masks'][0]).unsqueeze(0).float().cuda()
+    dataset = BlenderDataset(mode = 'train', save_directory  = opt.save_dir, num_points=opt.num_points)
+    object = dataset.__getitem__(1000)
+    depths = torch.tensor(object['depths']).unsqueeze(0).float().cuda()
+    colors = torch.tensor(object['colors'])
+    colors = colors.permute(0,3,1,2).unsqueeze(0).float().cuda()
+    masks = torch.tensor(object['masks']).unsqueeze(0).float().cuda()
     masks = masks.type(torch.int64)
-    gt_pc = torch.tensor(object['gt_pc']).float().unsqueeze(0).cuda()
+    gt_pc = torch.tensor(object['gt_pc']).unsqueeze(0).float().cuda()
     
     x, ap_x = encoder(colors, depths, masks, torch.Tensor([1]).long().cuda())
     ap_x = ap_x.squeeze(-1)
@@ -232,7 +235,7 @@ def test():
     pc_out = decoder(embedding = ap_x)
     pc_out = pc_out.squeeze(0).cpu().detach().numpy()
 
-    pc_gt = object['gt_pc']
+    pc_gt = torch.Tensor.numpy(object['gt_pc'])
     pcd_gt = o3d.geometry.PointCloud()
     pcd_out = o3d.geometry.PointCloud()
     pcd_gt.points = o3d.utility.Vector3dVector(pc_gt.transpose())
