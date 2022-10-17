@@ -1,0 +1,13 @@
+bpy==2.82.1
+kaolin==0.11.0
+mathutils==3.3.0
+matplotlib==3.5.3
+numpy==1.23.1
+open3d==0.15.2
+opencv_python==4.6.0.66
+Pillow==9.2.0
+pytorch_metric_learning==1.6.2
+PyYAML==6.0
+scipy==1.5.2
+torch==1.12.1
+torchvision==0.13.1
