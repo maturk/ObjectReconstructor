@@ -1,0 +1,12 @@
+name: obre
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8.13
+  - cudatoolkit=11.3
+  - pytorch
+  - numpy
+  - pip
+  - pip:
+    - -r requirements.txt

@@ -1,4 +1,3 @@
-bpy==2.82.1
 kaolin==0.11.0
 mathutils==3.3.0
 matplotlib==3.5.3
