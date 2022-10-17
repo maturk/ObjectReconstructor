@@ -62,10 +62,10 @@ class PointCloudDecoder(nn.Module):
 
 
 class PointCloudAE(nn.Module):
-    def __init__(self, emb_dim=512, n_pts=1024):
+    def __init__(self, emb_dim=512, num_pts=1024):
         super(PointCloudAE, self).__init__()
         self.encoder = PointCloudEncoder(emb_dim)
-        self.decoder = PointCloudDecoder(emb_dim, n_pts)
+        self.decoder = PointCloudDecoder(emb_dim, num_pts)
 
     def forward(self, in_pcs, emb=None):
         """
