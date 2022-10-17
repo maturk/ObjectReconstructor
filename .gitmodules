@@ -1,0 +1,3 @@
+[submodule "DenseFusion"]
+	path = DenseFusion
+	url = git@github.com:j96w/DenseFusion.git
