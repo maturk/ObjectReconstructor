@@ -12,12 +12,13 @@ import torch.nn.functional as F
 
 
 class BlenderDataset(torch.utils.data.Dataset):
-    def __init__(self, mode = 'train', save_directory  = '/Users/maturk/data/test', num_points = 1024):
+    def __init__(self, mode = 'train', save_directory  = '/Users/maturk/data/test', num_points = 1024, num_views = 15):
         self.objects = []
         self.root_directory = save_directory
         self.mode = mode
         self.get_object_paths()
         self.num_points = num_points
+        self.num_views = num_views
         
         
     def __getitem__(self, index):
@@ -25,21 +26,23 @@ class BlenderDataset(torch.utils.data.Dataset):
         depths = []
         colors = []
         masks = []
-        for dmap, color in zip(object['depth_paths'][0:15], object['color_paths'][0:15]):
+        for dmap, color in zip(object['depth_paths'][0:self.num_views], object['color_paths'][0:self.num_views]):
             try:
                 dmap_img = np.array(cv2.imread(dmap)[:,:,0], dtype=np.float32)
                 color_img = np.array(cv2.imread(color), dtype=np.float32)
                 mask = dmap_img<255
+                w = np.shape(color_img)[0]
+                h = np.shape(color_img)[1]
                 dmap_masked = dmap_img[mask][:, np.newaxis]
-                xmap = np.array([[j for i in range(640)] for j in range(480)])
+                xmap = np.array([[j for i in range(h)] for j in range(w)])
                 xmap = xmap[mask][:,np.newaxis]
-                ymap = np.array([[i for i in range(640)] for j in range(480)])
+                ymap = np.array([[i for i in range(h)] for j in range(w)])
                 ymap = ymap[mask][:,np.newaxis]
                 cam_scale = 250
                 cam_fx = 50 *10
                 cam_fy = 50 *10
-                cam_cx = 240 #240
-                cam_cy = 320 #320
+                cam_cx = int(h/2) #240
+                cam_cy = int(w/2) #320
                 z = dmap_masked / cam_scale
                 x = (ymap - cam_cx) * z / cam_fx
                 y = (xmap - cam_cy) * z / cam_fy
@@ -51,8 +54,10 @@ class BlenderDataset(torch.utils.data.Dataset):
                 masks.append(mask)
             except:
                 print('FAILED, dataset corrupted')
-                print('Object directory: ', object['object_dir'])
-                print('Class directory: ', object['class_dir'])
+                #print('Object directory: ', object['object_dir'])
+                #print('Class directory: ', object['class_dir'])
+                return self.__getitem__(np.random.randint(0, high = self.__len__() -1))
+                
             
         gt_pc = np.asarray(o3d.io.read_point_cloud(object['gt_pc']).points, dtype = np.float32).transpose()
         return {
@@ -201,7 +206,7 @@ class NOCSDataset(torch.utils.data.Dataset):
         }
                 
 
-def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data/Shapenet_small', save_directory = '/home/asl-student/mturkulainen/data/test', sample_points = 2048):
+def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet_small', save_directory = '/home/maturk/data/test2', sample_points = 2048):
     counter = 0
     for folder in sorted(os.listdir(shapenet_directory)):
         if not folder.startswith('.'):
@@ -213,7 +218,7 @@ def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data
                     model = models[0]
                     mesh = o3d.io.read_triangle_mesh(model)
                     points = mesh.sample_points_uniformly(sample_points)
-                    o3d.io.write_point_cloud(os.path.join(save_directory, folder, object_dir, 'pc.ply'), points, compressed = False)
+                    o3d.io.write_point_cloud(os.path.join(save_directory, folder, object_dir, 'pc.pcd'), points, compressed = False)
                     counter += 1
                 else:
                     continue
@@ -225,14 +230,18 @@ def shapenet_pc_sample(shapenet_directory = '/home/asl-student/mturkulainen/data
 # b838c5bc5241a44bf2f2371022475a36
 # c50c72eefe225b51cb2a965e75be701c
 # 9d453384794bc58b9a06a7de97b096dc
+# 1a0a2715462499fbf9029695a3277412
 
 if __name__ == "__main__":
-    #dataset = BlenderDataset(save_directory  = '/home/maturk/data/test')
+    dataset = BlenderDataset(save_directory  = '/home/maturk/data/test2')
     #dataset.get_object_paths()
+    object = dataset.__getitem__(10)
+    
+    #file = '/Users/maturk/data/test2/02880940/1a0a2715462499fbf9029695a3277412/pc.pcd'
    
-    #pc_gt = object['gt_pc']
-    #print(np.shape(pc_gt))
-    #pcd = o3d.geometry.PointCloud()
-    #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
-    #o3d.visualization.draw_geometries([pcd])
-    shapenet_pc_sample()
+    pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu())
+    print(np.shape(pc_gt))
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    o3d.visualization.draw_geometries([pcd])
+    #shapenet_pc_sample()
