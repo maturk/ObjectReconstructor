@@ -9,6 +9,8 @@ import pickle
 import matplotlib.pyplot as plt
 import open3d as o3d
 import torch.nn.functional as F
+import json
+from scipy.spatial.transform import Rotation 
 
 
 class BlenderDataset(torch.utils.data.Dataset):
@@ -58,15 +60,37 @@ class BlenderDataset(torch.utils.data.Dataset):
                 #print('Class directory: ', object['class_dir'])
                 return self.__getitem__(np.random.randint(0, high = self.__len__() -1))
                 
-            
         gt_pc = np.asarray(o3d.io.read_point_cloud(object['gt_pc']).points, dtype = np.float32).transpose()
+
+        with open(object['poses']) as f:
+            data = f.read()
+        data = data.split(';')
+        data.pop(-1) # remove empty entry
+        poses = []
+        for i in range(self.num_views+1):
+            pose = np.empty([4,4])
+            js = json.loads(data[i])
+            x = js['x']
+            y = js['y']
+            z = js['z']
+            eul_x = js['eul_x']
+            eul_y = js['eul_y']
+            eul_z = js['eul_z']
+            rotation = Rotation.from_euler('xyz', [eul_x, eul_y, eul_z], degrees=False).as_matrix()
+            position = np.array([x,y,z])
+            pose[:3,3] = position
+            pose[:3,:3] = rotation
+            pose[3,3] =1
+            poses.append(pose)
+        
         return {
-            'colors' : torch.tensor(np.array(colors)),
-            'depths' : torch.tensor(np.array(depths)),
-            'gt_pc'  : torch.tensor(gt_pc),
-            'masks'   : torch.tensor(np.array(masks)),
+            'colors' : torch.tensor(np.array(colors), dtype=torch.float32),
+            'depths' : torch.tensor(np.array(depths), dtype=torch.float32),
+            'gt_pc'  : torch.tensor(gt_pc, dtype=torch.float32),
+            'masks'   : torch.tensor(np.array(masks), dtype=torch.float32),
             'class_dir' : object['class_dir'],
-            'object_dir' : object['object_dir']
+            'object_dir' : object['object_dir'],
+            'poses' : torch.tensor(np.array(poses), dtype=torch.float32)
         }
         
     def __len__(self):
@@ -97,19 +121,22 @@ class BlenderDataset(torch.utils.data.Dataset):
                             depth_paths[dmap_id] = dmap
                         
                         if self.mode == 'train':
-                            gt_pc = glob.glob(os.path.join(folder, object_dir, 'pc.ply'))[0]
+                            gt_pc = glob.glob(os.path.join(folder, object_dir, 'pc.pcd'))[0]
+                            poses = glob.glob(os.path.join(folder, object_dir, 'poses.txt'))[0]
                         else:
                             gt_pc = None
-                        self.add_object(object_number, color_paths, depth_paths, class_dir, object_dir, gt_pc)
+                        self.add_object(object_number, color_paths, depth_paths, class_dir, object_dir, gt_pc, poses=poses)
+                        
                         object_number+=1
 
-    def add_object(self, object_number, color_paths, depth_paths, class_dir, object_dir, gt_pc):
+    def add_object(self, object_number, color_paths, depth_paths, class_dir, object_dir, gt_pc = None, poses = None):
         object_info = { 'object_number' : object_number,
             'color_paths' : color_paths,
             'depth_paths' : depth_paths,
             'class_dir' : int(class_dir),
             'object_dir' : object_dir,
-            'gt_pc'     : gt_pc
+            'gt_pc'     : gt_pc,
+            'poses' : poses
         }
         self.objects.append(object_info)
 
@@ -233,15 +260,16 @@ def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet_small', 
 # 1a0a2715462499fbf9029695a3277412
 
 if __name__ == "__main__":
-    dataset = BlenderDataset(save_directory  = '/home/maturk/data/test2')
+    dataset = BlenderDataset(save_directory  = '/Users/maturk/data/test2')
     #dataset.get_object_paths()
-    object = dataset.__getitem__(10)
-    
+    object = dataset.__getitem__(0)
+    poses = object['poses']
+    print(poses)
     #file = '/Users/maturk/data/test2/02880940/1a0a2715462499fbf9029695a3277412/pc.pcd'
    
-    pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu())
-    print(np.shape(pc_gt))
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
-    o3d.visualization.draw_geometries([pcd])
-    #shapenet_pc_sample()
+    #pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu())
+    #print(np.shape(pc_gt))
+    #pcd = o3d.geometry.PointCloud()
+    #pcd.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    #o3d.visualization.draw_geometries([pcd])
+    #shapenet_pc_sample(shapenet_directory = '/Users/maturk/data/Shapenet_small', save_directory = '/Users/maturk/data/test2',)
