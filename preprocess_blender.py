@@ -7,6 +7,8 @@ import mathutils
 from mathutils import Vector
 from pathlib import Path
 
+DEPTH_SCALE = 0.25
+
 def random_poses(upper_lim = 10): # set of four camera views in each of eight quadrants around a model
     coords = []
     # quadrant 1
@@ -81,7 +83,7 @@ depth_file_output.format.color_mode = "BW"
 map = nodes.new(type="CompositorNodeMapValue")
 # Size is chosen kind of arbitrarily, try out until you're satisfied with resulting depth map.
 map.offset = [0]
-map.size = [0.25]
+map.size = [DEPTH_SCALE]
 map.use_min = False
 map.min = [0]
 
