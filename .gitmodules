@@ -3,4 +3,4 @@
 	url = git@github.com:j96w/DenseFusion.git
 [submodule "ngp_pl"]
 	path = ngp_pl
-	url = git@github.com:kwea123/ngp_pl.git
+	url = git@github.com:maturk/ngp_pl.git
