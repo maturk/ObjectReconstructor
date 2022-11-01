@@ -1,4 +1,4 @@
-from turtle import width
+from turtle import color, width
 import torch
 import os
 import torch.nn as nn
@@ -153,7 +153,7 @@ class BlenderDataset(torch.utils.data.Dataset):
         xyz = pc
         num_xyz = pc.shape[0]
         assert num_xyz >= self.num_points, 'Not enough points in shape.'
-        idxs = np.random.choice(num_xyz, self.num_points)
+        idxs = np.random.choice(num_xyz, num_points)
         xyz = xyz[idxs, :]
         # To do : data augmentation and random noise
         return xyz, idxs
@@ -261,6 +261,7 @@ def pc_local_to_pc_global(pc, K, pose, blender_pre_rotation = True):
         pre_rot_T = np.eye(4)
         pre_rotation = r.as_matrix()
         pre_rot_T[:3,:3] = pre_rotation
+    else: pre_rot_T = np.eye(4)
     
     pc_out_global = np.ndarray((pc.shape[0], pc.shape[1]))
     for i in range(pc.shape[0]):
@@ -347,15 +348,87 @@ def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet_small', 
                         continue
 
 
+def blender_dataset_to_ngp_pl(save_directory):
+    ''' blender_dataset_to_ngp_pl
+    
+    Args:
+        save_directory (str, optional): Save directory. Defaults to '/home/maturk/data/test2'.
+    #TODO: add custom K [4x4]:
+    '''
+    import os
+    import shutil
+    rgb_path = os.path.join(save_directory, "rgb")
+    pose_path = os.path.join(save_directory, "pose")
+    intrinsics_path = os.path.join(save_directory, "intrinsics.txt")
+    if not os.path.exists(rgb_path):
+        os.makedirs(rgb_path)
+    if not os.path.exists(pose_path):
+        os.makedirs(pose_path)
+    
+    cam_scale , cam_fx, cam_fy, cam_cx, cam_cy = 250, 333, 333, 120, 120
+    K = torch.zeros((4,4), dtype= torch.float)
+    K[0,0], K[1,1], K[2,2], K[0,2],K[1,2], cam_fx, cam_fy, 1, cam_cx, cam_cy
+    K[0,0] = cam_fx
+    K[1,1] = cam_fy
+    K[2,2] = 1
+    K[0,2] = cam_cx
+    K[1,2] = cam_cy
+    K[3,3] = 1
+    np.savetxt(intrinsics_path, K)
+    
+    for folder in sorted(os.listdir(save_directory)):
+        if not folder.startswith('.') and not folder.endswith('.txt'):
+            for object_dir in (os.listdir(os.path.join(save_directory, folder))):
+                if not object_dir.startswith('.'):
+                    path = os.path.join(save_directory,folder, object_dir)
+                    prefix = '0_'
+                    colors = sorted(glob.glob(os.path.join(path, '*color.png')))
+                    for color in colors:
+                        name = os.path.basename(color)
+                        if int(name.split("_")[0]) > 9:
+                            file = rgb_path +'/' + prefix + '00' + name.split("_")[0] + ".png"
+                        else:
+                           file = rgb_path +'/' + prefix + '000' + name.split("_")[0] + ".png"
+                        shutil.copyfile(color, file)
+                    if not os.path.dirname(path).endswith('rgb') and not os.path.dirname(path).endswith('pose') and not os.path.basename(path).endswith('intrinsics.txt'):
+                        with open(os.path.join(path,'poses.txt')) as f:
+                            data = f.read()
+                            data = data.split(';')
+                            data.pop(-1) # remove empty entry
+                            poses = []
+                            for i in range(len(data)):
+                                pose = np.eye(4)
+                                js = json.loads(data[i])
+                                number = js['pose']
+                                x = js['x']
+                                y = js['y']
+                                z = js['z']
+                                eul_x = js['eul_x']
+                                eul_y = js['eul_y']
+                                eul_z = js['eul_z']
+                                rotation = Rotation.from_euler('xyz', [eul_x, eul_y, eul_z], degrees=False).as_matrix()
+                                position = np.array([x,y,z])
+                                pose[:3,3] = position
+                                pose[:3,:3] = rotation
+                                poses.append(pose)
+                                if int(name.split("_")[0]) > 9:
+                                    file = pose_path +'/' + prefix + '00' + str(number) + ".txt"
+                                else:
+                                    file = pose_path +'/' + prefix + '000' + str(number) + ".txt"
+                                np.savetxt(file,pose)
+                                
+                            
+
 if __name__ == "__main__":
-    dataset = BlenderDataset(save_directory  = '/Users/maturk/data/test4')
-    dataset.get_object_paths()
-    object = dataset.__getitem__(0)
-    pc = torch.Tensor.numpy(object['depths'][0])
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc)  
-    pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu()).transpose() 
-    pcdd = o3d.geometry.PointCloud()
-    pcdd.points = o3d.utility.Vector3dVector(pc_gt)  
-    o3d.visualization.draw_geometries([pcd, pcdd, o3d.geometry.TriangleMesh.create_coordinate_frame()]) 
+    #dataset = BlenderDataset(save_directory  = '/home/maturk/data/test2')
+    #dataset.get_object_paths()
+    #object = dataset.__getitem__(0)
+    #pc = torch.Tensor.numpy(object['depths'][0])
+    #pcd = o3d.geometry.PointCloud()
+    #pcd.points = o3d.utility.Vector3dVector(pc)  
+    #pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu()).transpose() 
+    #pcdd = o3d.geometry.PointCloud()
+    #pcdd.points = o3d.utility.Vector3dVector(pc_gt)  
+    #o3d.visualization.draw_geometries([pcd, o3d.geometry.TriangleMesh.create_coordinate_frame()]) 
     #shapenet_pc_sample(shapenet_directory = '/Users/maturk/data/Shapenet_small', save_directory = '/Users/maturk/data/test2',)
+    blender_dataset_to_ngp_pl()
