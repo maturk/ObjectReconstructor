@@ -55,6 +55,7 @@ class Trainer():
         for epoch in range(self.epochs):
             model.train()
             for i, data in enumerate(train_dataloader):
+                optimizer.zero_grad()
                 xyzs = []
                 batch_depths = data['depths']
                 for point_cloud in batch_depths:
@@ -100,40 +101,32 @@ class Trainer():
             torch.save(model.state_dict(), f"{self.results_dir}/{self.num_views}_{self.num_points}_{epoch}.pth")
     
     def train_one_object(self, model, object):
+            model.train()
             optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 10, gamma = 0.1)
-            xyzs = []
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 50, gamma = 0.9)
             depths = object['depths']
-            object['gt_pc'] = torch.tensor(object['gt_pc']).unsqueeze(0)
-            for point_cloud in depths:
-                xyzs.append(point_cloud)
-            xyzs = torch.tensor(xyzs).to(device=self.device, dtype= torch.float)
+            xyzs = torch.tensor(depths).to(device=self.device, dtype= torch.float32)
             xyzs = xyzs.unsqueeze(0)
             for epoch in range(self.epochs):
-                model.train()
-                with torch.cuda.amp.autocast(enabled=True):
-                    embedding, pc_out = model(xyzs)
-                    loss, _ = chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
+                optimizer.zero_grad()
+                embedding, pc_out = model(xyzs)
+                loss = chamfer_distance(pc_out, object['gt_pc'].unsqueeze(0).permute(0,2,1).to(self.device))
                 loss.backward()
                 optimizer.step() 
                 scheduler.step()
-                print('Learning rate: ', scheduler.get_lr())
-                print(f"Epoch {epoch} finished, evaluating ... ") 
-                model.eval()
-                val_loss = 0.0
-                with torch.cuda.amp.autocast(enabled=True):
-                    embedding, pc_out = model(xyzs)
-                    loss, _= chamfer_distance(pc_out, object['gt_pc'].permute(0,2,1).to(self.device))
-                val_loss += loss.item()
-                print(f"Epoch {epoch} test average loss: {val_loss}")
-                print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
+                
                 # save model after each epoch
-                if epoch % 50 == 0:
+                if epoch % 250 == 0:
+                    print('\n')
+                    print('Epoch: ', epoch)
+                    print('Loss: ', loss)
+                    print('Embedding norm : ', embedding.norm(), 'Embedding mean: ', embedding.mean() )
+                    print('Learning rate: ', scheduler.get_lr())
                     torch.save(model.state_dict(), f"{self.results_dir}/overfit_{self.num_views}_{self.num_points}_{epoch}.pth")
     
     def train_two_objects(self, model, object1, object2):
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 50, gamma = 0.99) # 20, 0.95 with lr = 0.0001 gets to 0.0024
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 50, gamma = 1) 
         contrastive_loss = losses.contrastive_loss.ContrastiveLoss()
         batch_idx = 0
         
@@ -153,12 +146,12 @@ class Trainer():
         
         batch_depths = batch_depths.view(batch_nums, self.num_views, self.num_points, 3)
         gt_pc = gt_pc.view(batch_nums, 3, 2048)
+        model.train()
         for epoch in range(self.epochs):
-            model.train()
+            optimizer.zero_grad()
             # Encode embeddings and decode to point cloud
-            with torch.cuda.amp.autocast(enabled=True):
-                embedding, pc_out = model(batch_depths)
-                chamfer_loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
+            embedding, pc_out = model(batch_depths)
+            chamfer_loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
             cont_loss = contrastive_loss(embedding, torch.Tensor([object1['class_dir'], object2['class_dir']]))
             loss = cont_loss + chamfer_loss.mean()
             
@@ -175,7 +168,6 @@ class Trainer():
             optimizer.step() 
             scheduler.step()
             
-            #print(f"Epoch {epoch} finished, evaluating ... ") 
             ## save model after each epoch 
             if epoch % 200 == 0:
                 torch.save(model.state_dict(), f"{self.results_dir}/double_PC_encoder_{self.num_views}_{self.num_points}_{epoch}.pth")
@@ -207,10 +199,10 @@ def test():
     import copy
     opt = parser.parse_args() 
     model = PointCloudAE(emb_dim = opt.emb_dim, num_pts= opt.num_points).to(opt.device)
-    model.load_state_dict(torch.load(os.path.join(opt.result_dir,'overfit_16_1028_100.pth')))
+    model.load_state_dict(torch.load(os.path.join(opt.result_dir,'overfit_16_1028_1250.pth')))
 
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
-    test = dataset.__getitem__(50)
+    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test2', num_points=opt.num_points)
+    test = dataset.__getitem__(0)
     depths = test['depths']
     xyzs = torch.tensor(depths).to(device=opt.device, dtype= torch.float)
     xyzs = xyzs.unsqueeze(0)
@@ -218,13 +210,13 @@ def test():
         embedding, pc_out = model(xyzs)
     pc_out = pc_out.squeeze(0).cpu().detach().numpy()
 
-    pc_gt = test['gt_pc']
+    pc_gt = torch.Tensor.numpy(test['gt_pc']).transpose()
     pcd_gt = o3d.geometry.PointCloud()
     pcd_out = o3d.geometry.PointCloud()
-    pcd_gt.points = o3d.utility.Vector3dVector(pc_gt.transpose())
+    pcd_gt.points = o3d.utility.Vector3dVector(pc_gt)
     pcd_out.points = o3d.utility.Vector3dVector(pc_out)
     pcd_gt.colors = o3d.utility.Vector3dVector()
-    o3d.visualization.draw_geometries([pcd_out])
+    o3d.visualization.draw_geometries([pcd_out, pcd_gt])
 
     def draw_registration_result(source, target, transformation):
         source_temp = copy.deepcopy(source)
@@ -239,10 +231,10 @@ def test():
 
 def train_one_object():
     opt = parser.parse_args() 
-    opt.epochs = 501
+    opt.epochs = 1500
     opt.num_points = 1028 # 2048
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
-    object = dataset.__getitem__(100)
+    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test2', num_points=opt.num_points)
+    object = dataset.__getitem__(0)
     encoder = PointCloudAE(emb_dim = opt.emb_dim, num_pts= opt.num_points).to(opt.device)
     trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
     trainer.train_one_object(encoder, object)
@@ -264,19 +256,19 @@ def train_one_object():
 def train_two_objects():
     import os
     opt = parser.parse_args() 
-    opt.epochs = 1001
+    opt.epochs = 1601
     dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test2/', num_points=opt.num_points, num_views= opt.num_views)
-    object1 = dataset.__getitem__(100)
-    object2 = dataset.__getitem__(500)
+    object1 = dataset.__getitem__(0)
+    object2 = dataset.__getitem__(10)
     
     print('Class ids', object1['class_dir'], object2['class_dir'])
     model = PointCloudAE(emb_dim = opt.emb_dim, num_pts= opt.num_points).to(opt.device)
 
-    LOAD_MODEL = True
+    LOAD_MODEL = False
     if LOAD_MODEL == True:
-        model.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_PC_encoder_16_1024_2000.pth')))
+        model.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_PC_encoder_16_1028_2000.pth')))
 
-    trainer = Trainer(opt.epochs, opt.device, opt.lr*0.01, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
+    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
     trainer.train_two_objects(model, object1=object1, object2=object2)
 
 def test_two_objects():
@@ -284,10 +276,10 @@ def test_two_objects():
     import copy
     opt = parser.parse_args() 
     model = PointCloudAE( emb_dim=opt.emb_dim, num_pts = opt.num_points).to(opt.device)
-    model.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_PC_encoder_16_1024_1000.pth')))
+    model.load_state_dict(torch.load(os.path.join(opt.result_dir,f'double_PC_encoder_{opt.num_views}_{opt.num_points}_600.pth')))
 
     dataset = BlenderDataset(mode = 'train', save_directory  = opt.save_dir, num_points=opt.num_points, num_views= opt.num_views)
-    object = dataset.__getitem__(500)
+    object = dataset.__getitem__(0)
     depths = torch.tensor(object['depths']).unsqueeze(0).float().cuda()
     colors = torch.tensor(object['colors'])
     colors = colors.permute(0,3,1,2).unsqueeze(0).float().cuda()

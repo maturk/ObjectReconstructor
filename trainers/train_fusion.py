@@ -168,20 +168,6 @@ class Trainer():
             if epoch % 20 == 0:
                 print('Loss: ', loss)
             
-            #print(f"Epoch {epoch} finished, evaluating ... ") 
-            #encoder.eval()
-            #decoder.eval()
-            #val_loss = 0.0
-            # Encoder decode
-            #x, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
-            #ap_x = ap_x.squeeze(-1)
-            #pc_out = decoder(embedding = ap_x)
-            #loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
-            #val_loss += loss.item()
-            #print(f"Epoch {epoch} test average loss: {val_loss}")
-            #print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
-            # save model after each epoch 
-            
             if epoch % 100 == 0:
                 torch.save(encoder.state_dict(), f"{self.results_dir}/single_fusion_encoder_{self.num_views}_{self.num_points}_{epoch}.pth")
                 torch.save(decoder.state_dict(), f"{self.results_dir}/single_fusion_decoder_{self.num_views}_{self.num_points}_{epoch}.pth")
@@ -209,8 +195,7 @@ class Trainer():
         gt_pc_2 = torch.tensor(object2['gt_pc']).float().cuda()
         
         batch_nums = int(2)
-       
-                
+        
         batch_colors = torch.cat((batch_colors_1,batch_colors_2), dim = 0)
         batch_depths = torch.cat((batch_depths_1, batch_depths_2), dim = 0)
         batch_masks = torch.cat((batch_masks_1, batch_masks_2), dim = 0)
@@ -223,7 +208,7 @@ class Trainer():
         for epoch in range(self.epochs):
             encoder.train()
             decoder.train()
-
+            optimizer.zero_grad()
             # Encode embeddings and decode to point cloud
             x1, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
             ap_x = ap_x.squeeze(-1)
@@ -231,7 +216,7 @@ class Trainer():
             chamfer_loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
             cont_loss = contrastive_loss(ap_x, torch.Tensor([object1['class_dir'], object2['class_dir']]))
             
-            if epoch % 10 == 0 :
+            if epoch % 20 == 0 :
                 print('\n')
                 print('Epoch: ', epoch)
                 print('chamfer loss: ', chamfer_loss, 'contrastive loss: ', cont_loss)
@@ -244,20 +229,7 @@ class Trainer():
             optimizer.step() 
             scheduler.step()
             
-            #print(f"Epoch {epoch} finished, evaluating ... ") 
-            #encoder.eval()
-            #decoder.eval()
-            #val_loss = 0.0
-            # Encoder decode
-            #x, ap_x = encoder(batch_colors, batch_depths, batch_masks, torch.Tensor([1]).long().cuda())
-            #ap_x = ap_x.squeeze(-1)
-            #pc_out = decoder(embedding = ap_x)
-            #loss = chamfer_distance(pc_out, gt_pc.permute(0,2,1).to(self.device))
-            #val_loss += loss.item()
-            #print(f"Epoch {epoch} test average loss: {val_loss}")
-            #print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
-            ## save model after each epoch 
-            if epoch % 50 == 0:
+            if epoch % 100 == 0:
                 torch.save(encoder.state_dict(), f"{self.results_dir}/double_fusion_encoder_{self.num_views}_{self.num_points}_{epoch}.pth")
                 torch.save(decoder.state_dict(), f"{self.results_dir}/double_fusion_decoder_{self.num_views}_{self.num_points}_{epoch}.pth")
         
@@ -354,20 +326,20 @@ def train_one_object():
 def train_two_objects():
     import os
     opt = parser.parse_args() 
-    opt.epochs = 600
+    opt.epochs = 601
     dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test2/', num_points=opt.num_points, num_views= opt.num_views)
-    object1 = dataset.__getitem__(100)
-    object2 = dataset.__getitem__(500)
+    object1 = dataset.__getitem__(0)
+    object2 = dataset.__getitem__(10)
     
     print('Class ids', object1['class_dir'], object2['class_dir'])
     encoder = PoseNet(num_points = opt.num_points, emb_dim=opt.emb_dim).to(opt.device)
     decoder = PointCloudDecoder(emb_dim=opt.emb_dim, n_pts=opt.num_points).to(opt.device)
-    LOAD_MODEL = True
+    LOAD_MODEL = False
     if LOAD_MODEL == True:
-        encoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_fusion_encoder_10_1024_650.pth')))
-        decoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_fusion_decoder_10_1024_650.pth')))
+        encoder.load_state_dict(torch.load(os.path.join(opt.result_dir,f'double_fusion_encoder_{opt.num_views}_{opt.num_points}_650.pth')))
+        decoder.load_state_dict(torch.load(os.path.join(opt.result_dir,f'double_fusion_decoder_{opt.num_views}_{opt.num_points}_650.pth')))
 
-    trainer = Trainer(opt.epochs, opt.device, opt.lr * 0.0001, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
+    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
     trainer.train_two_objects(encoder, decoder, object1=object1, object2=object2)
     
 def test_two_objects():
@@ -376,11 +348,11 @@ def test_two_objects():
     opt = parser.parse_args() 
     encoder = PoseNet(num_points = opt.num_points, emb_dim=opt.emb_dim).to(opt.device)
     decoder = PointCloudDecoder(emb_dim=opt.emb_dim, n_pts=opt.num_points).to(opt.device)
-    encoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_fusion_encoder_10_1024_550.pth')))
-    decoder.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_fusion_decoder_10_1024_550.pth')))
+    encoder.load_state_dict(torch.load(os.path.join(opt.result_dir, f'double_fusion_encoder_{opt.num_views}_{opt.num_points}_600.pth')))
+    decoder.load_state_dict(torch.load(os.path.join(opt.result_dir, f'double_fusion_decoder_{opt.num_views}_{opt.num_points}_600.pth')))
 
     dataset = BlenderDataset(mode = 'train', save_directory  = opt.save_dir, num_points=opt.num_points, num_views= opt.num_views)
-    object = dataset.__getitem__(100)
+    object = dataset.__getitem__(0)
     depths = torch.tensor(object['depths']).unsqueeze(0).float().cuda()
     colors = torch.tensor(object['colors'])
     colors = colors.permute(0,3,1,2).unsqueeze(0).float().cuda()
@@ -420,6 +392,6 @@ def test_two_objects():
 if __name__ == "__main__":
     #main()
     #train_one_object()
-    #train_two_objects()
+    train_two_objects()
     #test()
-    test_two_objects()
+    #test_two_objects()
