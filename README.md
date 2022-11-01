@@ -17,7 +17,7 @@ pushd ./ObjectReconstructor
 pip install -r requirements.txt
 ```
 
-Follow ngp_pl installation instructions. The following method has been tested.
+Follow [ngp_pl](https://github.com/kwea123/ngp_pl) installation instructions. The following method has been tested.
 ```
 pushd ./ngp_pl
 pip install torch-scatter==2.0.6
