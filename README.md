@@ -14,7 +14,7 @@ conda activate obre
 conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
 
 pushd ./ObjectReconstructor
-conda env create -f environment.yml
+pip install -r requirements.txt
 ```
 
 Follow ngp_pl installation instructions. The following method has been tested.
