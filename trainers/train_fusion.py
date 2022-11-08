@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from ObjectReconstructor.utils import BlenderDataset
+from ObjectReconstructor.datasets import BlenderDataset
 from ObjectReconstructor.models.models import PointCloudDecoder
 from ObjectReconstructor.DenseFusion.lib.network import PoseNet 
 import argparse
 import numpy as np
-#from pytorch3d.loss import chamfer_distance
+from pytorch3d.loss import chamfer_distance
 from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d

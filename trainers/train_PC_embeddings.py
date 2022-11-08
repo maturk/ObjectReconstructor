@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from ObjectReconstructor.utils import BlenderDataset
+from ObjectReconstructor.datasets import BlenderDataset
 from ObjectReconstructor.models.models import PointCloudEncoder, PointCloudAE
 import argparse
 import time
 import numpy as np
-#from pytorch3d.loss import chamfer_distance
-from kaolin.metrics.pointcloud import chamfer_distance
+from pytorch3d.loss import chamfer_distance
+#from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
 from pytorch_metric_learning import losses
@@ -20,7 +20,7 @@ parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
-parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/ae', help='directory to save train results')
+parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/point_clouds', help='directory to save train results')
 parser.add_argument('--save_dir', type=str, default='/home/maturk/data/test2', help='save directory of preprocessed shapenet images')
 parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
 parser.add_argument('--workers', '-w', type=int, default=1)

@@ -108,7 +108,7 @@ class DenseFusion(nn.Module):
         return avg_x, avg_ap_x
 
 if __name__ == "__main__":
-    from ObjectReconstructor.utils import BlenderDataset
+    from ObjectReconstructor.datasets import BlenderDataset
     dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=500)
     test = dataset.__getitem__(4)
     dataloader = torch.utils.data.DataLoader(dataset,
