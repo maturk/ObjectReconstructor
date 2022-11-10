@@ -1,6 +1,6 @@
 # ObjectReconstructor
 
-Object shape reconstruction from RGB-D images. 
+Object shape reconstruction from RGB-D images. Auto-encoder trained on multi-view RGB-D images with pointcloud and voxel grid shape predictors.
 
 ## Install
 ### Prepare environment
@@ -48,5 +48,9 @@ Dataset of multi-view images of ShapeNet models with ground truth camera poses, 
 
 ### Prepare Blender Dataset
 Tested on Blender version 2.93.9. Note, Blender version <3.0 required. Python API changes in 3.0+ do not work with the preprocess script. To create the dataset of rgb, depth, and ground truth pointclouds and voxel grids, open Blender and run preprocess_blender.py script. 
+
+## Results
+### Voxel results
+Ground truth vs predicted:
 
 Work in progress...
