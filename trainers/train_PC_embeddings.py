@@ -1,13 +1,9 @@
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
 from ObjectReconstructor.datasets import BlenderDataset
-from ObjectReconstructor.models.models import PointCloudEncoder, PointCloudAE
+from ObjectReconstructor.models.point_ae import PointCloudAE
 import argparse
-import time
 import numpy as np
 from pytorch3d.loss import chamfer_distance
-#from kaolin.metrics.pointcloud import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
 from pytorch_metric_learning import losses

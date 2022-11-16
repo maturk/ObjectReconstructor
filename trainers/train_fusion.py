@@ -1,7 +1,6 @@
 import torch
-import torch.nn as nn
 from ObjectReconstructor.datasets import BlenderDataset
-from ObjectReconstructor.models.models import PointCloudDecoder
+from ObjectReconstructor.models.point_ae import PointCloudDecoder
 from ObjectReconstructor.DenseFusion.lib.network import PoseNet 
 import argparse
 import numpy as np
@@ -17,7 +16,7 @@ parser.add_argument('--num_points', type=int, default=1024, help='number of poin
 parser.add_argument('--emb_dim', type=int, default=512, help='dimension of latent embedding')
 parser.add_argument('--batch_size', type=int, default = 5, help='batch size')
 parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
-parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
 parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/ae', help='directory to save train results')
