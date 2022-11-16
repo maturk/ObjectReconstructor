@@ -75,6 +75,7 @@ class BlenderDataset(torch.utils.data.Dataset):
                 masks.append(mask)
             except:
                 print('FAILED, dataset paths corrupted')
+                print(object['class_dir'], object['object_dir'])
                 return self.__getitem__(np.random.randint(0, high = self.__len__() -1))
         
         return {
@@ -136,6 +137,7 @@ class BlenderDataset(torch.utils.data.Dataset):
                             gt_pc = None
                             gt_grid = None
                             poses = None
+                        
                         self.add_object(object_number, color_paths, depth_paths, class_dir, object_dir, gt_pc, gt_grid, poses=poses)
                         object_number+=1
 
@@ -154,10 +156,17 @@ class BlenderDataset(torch.utils.data.Dataset):
     def pc_down_sample(self, pc, num_points):
         xyz = pc
         num_xyz = pc.shape[0]
-        assert num_xyz >= self.num_points, 'Not enough points in shape.'
-        idxs = np.random.choice(num_xyz, num_points)
-        xyz = xyz[idxs, :]
-        # To do : data augmentation and random noise
+        if num_xyz >= self.num_points:
+            idxs = np.random.choice(num_xyz, num_points)
+            xyz = xyz[idxs, :]
+        else:
+            # if not enough points to downsample, randomly repeat points in input PC
+            rem = num_points - num_xyz
+            rem_idx = np.random.choice(num_xyz, rem)
+            xyz_rem = xyz[rem_idx, :]
+            xyz =  np.concatenate((xyz, xyz_rem), axis=0)
+            idxs = np.random.choice(num_xyz, num_points)
+            xyz = xyz[idxs, :]
         return xyz, idxs
 
 
@@ -248,16 +257,5 @@ class NOCSDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     dataset = BlenderDataset(save_directory  = '/home/maturk/data/small_set')
-    #dataset.get_object_paths()
-    object = dataset.__getitem__(0)
-    gt_grid = object['gt_grid']
+    pass
     
-    #pc = torch.Tensor.numpy(object['depths'][0])
-    #pcd = o3d.geometry.PointCloud()
-    #pcd.points = o3d.utility.Vector3dVector(pc)  
-    #pc_gt = torch.Tensor.numpy(object['gt_pc'].detach().cpu()).transpose() 
-    #pcdd = o3d.geometry.PointCloud()
-    #pcdd.points = o3d.utility.Vector3dVector(pc_gt)  
-    #o3d.visualization.draw_geometries([pcd, o3d.geometry.TriangleMesh.create_coordinate_frame()]) 
-    #shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet_small', save_directory = '/home/maturk/data/small_set',)
-    #blender_dataset_to_ngp_pl()
