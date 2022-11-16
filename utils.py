@@ -5,8 +5,20 @@ import numpy as np
 import open3d as o3d
 import json
 from scipy.spatial.transform import Rotation 
-from ObjectReconstructor.configs import VOXEL_OCCUPANCY_TRESHOLD, VOXEL_RESOLUTION, VOXEL_SIZE
+from ObjectReconstructor.configs import VOXEL_OCCUPANCY_TRESHOLD, VOXEL_RESOLUTION, VOXEL_SIZE, CUBIC_SIZE, GRID_MAX, GRID_MIN
 
+
+def voxel_to_pc(voxel):
+    voxel = voxel.sigmoid()
+    out = []
+    for i in range(voxel.shape[0]):
+        indices = (voxel[i,:] >= 0.5).nonzero(as_tuple=False)
+        if indices.nelement() == 0:
+            points = torch.zeros((1,3))
+        else:
+            points = VOXEL_SIZE * indices[:,:] - CUBIC_SIZE / 2
+        out.append(points)
+    return out
 
 def pc_local_to_pc_global(pc, K, pose, blender_pre_rotation = True):
     """ Transform local point cloud into global frame
