@@ -1,6 +1,16 @@
+'''
+Point cloud auto-encoder 
+Code adapted from CenterSnap: https://github.com/zubair-irshad/CenterSnap/blob/master/external/shape_pretraining/model/auto_encoder.py
+
+Additions: 
+* [x] Dense-fusion like encoder of color and depth channels (PoseNet). 
+* [x] Support for multi-view and single-view fusion. 
+'''
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ObjectReconstructor.DenseFusion.lib.network import PoseNet 
 
 
 class PointCloudEncoder(nn.Module):
@@ -56,10 +66,10 @@ class PointCloudDecoder(nn.Module):
 
 
 class PointCloudAE(nn.Module):
-    def __init__(self, emb_dim=512, num_pts=1024):
+    def __init__(self, emb_dim=512, num_points=1024):
         super(PointCloudAE, self).__init__()
         self.encoder = PointCloudEncoder(emb_dim)
-        self.decoder = PointCloudDecoder(emb_dim, num_pts)
+        self.decoder = PointCloudDecoder(emb_dim, num_points)
 
     def forward(self, in_pcs, emb=None):
         """
@@ -76,6 +86,33 @@ class PointCloudAE(nn.Module):
             emb = self.encoder(xyzs)
         out_pc = self.decoder(emb)
         return emb, out_pc
+
+
+class PointFusionAE(nn.Module):
+    def __init__(self, emb_dim=512, num_points = 1024):
+        super(PointFusionAE, self).__init__()
+        self.emb_dim = emb_dim
+        self.num_points = num_points
+        self.encoder = PoseNet(num_points = self.num_points, emb_dim = self.emb_dim)
+        self.decoder = PointCloudDecoder(emb_dim=self.emb_dim, n_pts=self.num_points)
+    
+    def forward(self, colors, xyzs, masks, emb=None):
+        """
+        Args:
+            in_pcs: (B, num_views, N, 3)
+            emb: (B, 512)
+
+        Returns:
+            emb: (B, emb_dim)
+            out_voxel: (B, voxel_size, voxel_size, voxel_size)
+        """
+        if emb is None:
+            #xyzs = xyzs.permute(0, 1, 3, 2)
+            colors = colors.permute(0,1,4,2,3)   
+            x, ap_x = self.encoder(colors, xyzs, masks, obj = torch.Tensor([1]).long().cuda())
+            ap_x = ap_x.squeeze(-1)
+        out_pc = self.decoder(ap_x)
+        return ap_x, out_pc
 
 
 if __name__ == "__main__":
