@@ -1,6 +1,6 @@
 [submodule "DenseFusion"]
 	path = DenseFusion
-	url = git@github.com:j96w/DenseFusion.git
+	url = git@github.com:maturk/DenseFusion.git
 [submodule "ngp_pl"]
 	path = ngp_pl
 	url = git@github.com:maturk/ngp_pl.git
