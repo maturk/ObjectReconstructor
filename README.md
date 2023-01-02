@@ -2,13 +2,18 @@
 
 Object shape reconstruction from RGB-D images. Auto-encoder trained on multi-view RGB-D images with pointcloud and voxel grid shape predictors.
 
-## Install
-### Prepare environment
+## Features
+* [x] Multi-view/single-view encoder support for both training and inference time.
+* [x] Supports both RGB-D channel or Depth-only input.
+* [x] Supports point cloud or voxel decoders for shape reconstruction.
+
+## Installation Instructions
+### Prepare Environment
 
 Installation instructions were tested for Python 3.8, pytorch = 1.12.1/1.11.0, and cudatoolkit = 11.3.
 
 ```
-git clone --recursive git@github.com:maturk/ObjectReconstructor.git
+git clone --recurse-submodules git@github.com:maturk/ObjectReconstructor.git
 conda create -n obre python=3.8
 conda activate obre
 conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
@@ -45,9 +50,18 @@ Dataset of multi-view images of ShapeNet models with ground truth camera poses, 
 <!--![bowl](https://user-images.githubusercontent.com/30566358/201068558-f08f935a-89a4-4495-a258-b1bbd2d08f15.png)-->
 <!-- ![bottle](https://user-images.githubusercontent.com/30566358/201069912-eb07889a-4444-43e7-a131-fc803598c320.png) -->
 
+### Download Training Dataset
+You can download a premade train/test split by running the following script:
+```
+bash ./download_custom_dataset.sh 
+```
 
-### Prepare Blender Dataset
-Tested on Blender version 2.93.9. Note, Blender version <3.0 required. Python API changes in 3.0+ do not work with the preprocess script. To create the dataset of rgb, depth, and ground truth pointclouds and voxel grids, open Blender and run preprocess_blender.py script. 
+### Create Your Own Dataset with Blender
+Tested on Blender version 2.93.9. Note, Blender version <3.0 required. To create your own custom dataset of rgb, depth, and ground truth point clouds and voxel grids, open Blender, modify the download directory of your shapenet model/texture files, and run preprocess_blender.py script.
+
+## Training Scripts
+### RGB-D fusion vs depth-only training
+I provide training scripts to train auto-encoders for both RGB-D or Depth only channels. RGB-D training works with a modified [Dense-Fusion](https://github.com/j96w/DenseFusion) architecture that uses both color and depth channels to create an embedding vector. Multiple-views of the same object are fused into one embedding. Depth only training works with a PointNet encoder. Point cloud and voxel grid decoders are simple MLPs.
 
 ## Results
 ### Voxel results
