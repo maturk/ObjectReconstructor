@@ -4,8 +4,10 @@ import glob
 import numpy as np
 import open3d as o3d
 import json
+
 from scipy.spatial.transform import Rotation 
-from ObjectReconstructor.configs import VOXEL_OCCUPANCY_TRESHOLD, VOXEL_RESOLUTION, VOXEL_SIZE, CUBIC_SIZE, GRID_MAX, GRID_MIN
+from configs import VOXEL_OCCUPANCY_TRESHOLD, VOXEL_RESOLUTION, VOXEL_SIZE, CUBIC_SIZE, GRID_MAX, GRID_MIN
+
 
 
 def voxel_to_pc(voxel):
@@ -146,13 +148,6 @@ def blender_dataset_to_ngp_pl(save_directory):
     '''
     import os
     import shutil
-    rgb_path = os.path.join(save_directory, "rgb")
-    pose_path = os.path.join(save_directory, "pose")
-    intrinsics_path = os.path.join(save_directory, "intrinsics.txt")
-    if not os.path.exists(rgb_path):
-        os.makedirs(rgb_path)
-    if not os.path.exists(pose_path):
-        os.makedirs(pose_path)
     
     cam_scale , cam_fx, cam_fy, cam_cx, cam_cy = 250, 333, 333, 120, 120
     K = torch.zeros((4,4), dtype= torch.float)
@@ -163,13 +158,23 @@ def blender_dataset_to_ngp_pl(save_directory):
     K[0,2] = cam_cx
     K[1,2] = cam_cy
     K[3,3] = 1
-    np.savetxt(intrinsics_path, K)
     
     for folder in sorted(os.listdir(save_directory)):
         if not folder.startswith('.') and not folder.endswith('.txt'):
             for object_dir in (os.listdir(os.path.join(save_directory, folder))):
                 if not object_dir.startswith('.'):
                     path = os.path.join(save_directory,folder, object_dir)
+                    rgb_path = os.path.join(path, "rgb")
+                    depth_path = os.path.join(path, 'depth')
+                    pose_path = os.path.join(path, "pose")
+                    intrinsics_path = os.path.join(path, "intrinsics.txt")
+                    np.savetxt(intrinsics_path, K)
+                    if not os.path.exists(rgb_path):
+                        os.makedirs(rgb_path)
+                    if not os.path.exists(depth_path):
+                        os.makedirs(depth_path)
+                    if not os.path.exists(pose_path):
+                        os.makedirs(pose_path)
                     prefix = '0_'
                     colors = sorted(glob.glob(os.path.join(path, '*color.png')))
                     for color in colors:
@@ -179,6 +184,16 @@ def blender_dataset_to_ngp_pl(save_directory):
                         else:
                            file = rgb_path +'/' + prefix + '000' + name.split("_")[0] + ".png"
                         shutil.copyfile(color, file)
+                        os.remove(color)
+                    depths = sorted(glob.glob(os.path.join(path, '*depth*.png')))
+                    for depth in depths:
+                        name = os.path.basename(depth)
+                        if int(name.split("_")[0]) > 9:
+                            file = depth_path +'/' + prefix + '00' + name.split("_")[0] + ".png"
+                        else:
+                           file = depth_path +'/' + prefix + '000' + name.split("_")[0] + ".png"
+                        shutil.copyfile(depth, file)
+                        os.remove(depth) 
                     if not os.path.dirname(path).endswith('rgb') and not os.path.dirname(path).endswith('pose') and not os.path.basename(path).endswith('intrinsics.txt'):
                         with open(os.path.join(path,'poses.txt')) as f:
                             data = f.read()
@@ -200,7 +215,7 @@ def blender_dataset_to_ngp_pl(save_directory):
                                 pose[:3,3] = position
                                 pose[:3,:3] = rotation
                                 poses.append(pose)
-                                if int(name.split("_")[0]) > 9:
+                                if int(number) > 9:
                                     file = pose_path +'/' + prefix + '00' + str(number) + ".txt"
                                 else:
                                     file = pose_path +'/' + prefix + '000' + str(number) + ".txt"
@@ -233,7 +248,7 @@ def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
         TexturesVertex )
     
     mesh = cubify(grid, thresh=thresh) # voxel to mesh
-    device = torch.device('cpu' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     R, T = look_at_view_transform(1.5, view_elev, 180) 
     cameras = FoVPerspectiveCameras(device=device, R=R, T=T)
@@ -267,3 +282,6 @@ def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
     images = renderer(render_mesh)
     
     return images
+
+if __name__ == "__main__":
+    pass
