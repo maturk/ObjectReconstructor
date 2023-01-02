@@ -1,3 +1,12 @@
+'''
+Voxel auto-encoder 
+
+Features: 
+* [x] Dense-fusion like encoder of color and depth channels (PoseNet). 
+* [x] Support for multi-view and single-view fusion. 
+'''
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
