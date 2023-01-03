@@ -37,7 +37,7 @@ popd
 ```
 
 ## Datasets
-### Custom multi-view ShapeNet Dataset
+### Multi-view ShapeNet Dataset
 Dataset of multi-view images of ShapeNet models with ground truth camera poses, depth maps, pointclouds, and voxel grids. Some examples of the synthetic renders can be seen below.
 
 ![cup](https://user-images.githubusercontent.com/30566358/201067906-197132c9-ccd9-470c-b0c4-65a0e439a30d.png)
