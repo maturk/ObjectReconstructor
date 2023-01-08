@@ -11,6 +11,7 @@ import open3d as o3d
 from pytorch_metric_learning import losses
 from matplotlib import pyplot as plt
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_points', type=int, default=1024, help='number of points in point cloud')
 parser.add_argument('--emb_dim', type=int, default=512, help='dimension of latent embedding')
@@ -21,7 +22,6 @@ parser.add_argument('--epochs', type=int, default=30, help='max number of epochs
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
 parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/ae', help='directory to save train results')
 parser.add_argument('--save_dir', type=str, default='/home/maturk/data/test2', help='save directory of preprocessed shapenet images')
-parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
 parser.add_argument('--workers', '-w', type=int, default=1)
 parser.add_argument('--num_views', type=int, default=10, help = 'Number of input views per object instance')
 
@@ -389,8 +389,4 @@ def test_two_objects():
     
 
 if __name__ == "__main__":
-    #main()
-    #train_one_object()
-    train_two_objects()
-    #test()
-    #test_two_objects()
+    main()

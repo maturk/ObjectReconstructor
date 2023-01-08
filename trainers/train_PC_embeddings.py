@@ -1,24 +1,30 @@
 import torch
 from ObjectReconstructor.datasets import BlenderDataset
-from ObjectReconstructor.models.point_ae import PointCloudAE
+from ObjectReconstructor.models.point_ae import PointCloudAE, PointFusionAE
 import argparse
 import numpy as np
 from pytorch3d.loss import chamfer_distance
 from torch.utils.data import random_split
 import open3d as o3d
 from pytorch_metric_learning import losses
+from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
+import cv2
+from PIL import Image
+
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--fusion', type=bool, default=False, help='Set to true if fusion model is to be used. Fusio combines both RGB and Depth channel for encoder. Default False, Depth only encoder.')
 parser.add_argument('--num_points', type=int, default=1024, help='number of points in point cloud')
 parser.add_argument('--emb_dim', type=int, default=256, help='dimension of latent embedding')
-parser.add_argument('--batch_size', type=int, default = 10, help='batch size')
+parser.add_argument('--batch_size', type=int, default = 2, help='batch size')
 parser.add_argument('--device', type=str, default='cuda:0', help='GPU to use')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--epochs', type=int, default=30, help='max number of epochs to train')
 parser.add_argument('--load_model', type=str, default='', help='resume from saved model')
 parser.add_argument('--result_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/point_clouds', help='directory to save train results')
-parser.add_argument('--save_dir', type=str, default='/home/maturk/data/test2', help='save directory of preprocessed shapenet images')
-parser.add_argument('--dataset_root', type=str, default = '', help='dataset root dir')
+parser.add_argument('--log_dir', type=str, default='/home/maturk/git/ObjectReconstructor/results/point_clouds/logs', help='directory to save train log results')
+parser.add_argument('--save_dir', type=str, default='/home/maturk/data/train_test_split', help='save directory of preprocessed shapenet images')
 parser.add_argument('--workers', '-w', type=int, default=1)
 parser.add_argument('--num_views', type=int, default=16, help = 'Number of input views per object instance')
 
@@ -31,7 +37,10 @@ class Trainer():
                  results_dir,
                  batch_size,
                  num_views,
-                 num_points
+                 num_points,
+                 log_dir,
+                 emb_dim,
+                 fusion
                 ):
         self.epochs = epochs
         self.device = device
@@ -42,59 +51,82 @@ class Trainer():
         self.device = device
         self.num_views = num_views
         self.num_points = num_points
+        self.emb_dim = emb_dim
+        self.log_dir = log_dir
+        self.eval = False
+        self.fusion = fusion
 
     def train(self, model, train_dataloader, eval_dataloader):
+        writer = SummaryWriter(log_dir=self.log_dir)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
-        batch_idx = 0
         contrastive_loss = losses.contrastive_loss.ContrastiveLoss()
-
-        for epoch in range(self.epochs):
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 500, gamma = 1)
+        
+        for epoch in tqdm(range(self.epochs)):            
             model.train()
+            batch_idx = 0
             for i, data in enumerate(train_dataloader):
                 optimizer.zero_grad()
-                xyzs = []
-                batch_depths = data['depths']
-                for point_cloud in batch_depths:
-                    xyzs.append(point_cloud)
-                xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
-                batch_nums = int(xyzs.shape[0]/(self.num_views-1))
-                xyzs = torch.reshape(xyzs, (batch_nums, self.num_views - 1, self.num_points, 3))
-
-                with torch.cuda.amp.autocast(enabled=True):
-                    embedding, pc_out = model(xyzs)
-                    chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
-                    cont_loss = contrastive_loss(embedding,data['class_dir'])
-                    loss = chamfer_loss.mean() + cont_loss
-                loss.backward()
-                optimizer.step() 
-
-                batch_idx += 1
-                if batch_idx % 100 == 0:
-                    print(f"Batch {batch_idx} Loss:{loss}")
-
-            print(f"Epoch {epoch} finished, evaluating ... ") 
-            model.eval()
-            val_loss = 0.0
-            for i, data in enumerate(eval_dataloader, 1):
-                xyzs = []
-                batch_colors = data['colors']
-                batch_depths = data['depths']
-                for point_cloud in batch_depths:
-                    xyzs.append(point_cloud)
-                xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
-                batch_nums = int(xyzs.shape[0]/(self.num_views-1))
-                xyzs = torch.reshape(xyzs, (batch_nums, self.num_views - 1, self.num_points, 3))
-                with torch.cuda.amp.autocast(enabled=True):
-                    embedding, pc_out = model(xyzs)
-                    loss, _= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
-                val_loss += loss.mean().item()
-                if i % 20 == 0:
-                    print(f"Batch {i} Loss: {loss}")
-            val_loss = val_loss / i
-            print(f"Epoch {epoch} test average loss: {val_loss}")
-            print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
-            # save model after each epoch
-            torch.save(model.state_dict(), f"{self.results_dir}/{self.num_views}_{self.num_points}_{epoch}.pth")
+                batch_depths = data['depths'].clone().detach().to(device=self.device, dtype= torch.float32)
+                batch_colors = data['colors'].clone().detach().to(device=self.device, dtype= torch.float32)
+                print(batch_colors.shape)
+                print(batch_depths.shape)
+                im = Image.fromarray((batch_colors[0,0,:,:,:].cpu().numpy() * 255).astype(np.uint8))
+                im.save('/home/maturk/git/ObjectReconstructor/delete/im1.png')
+                im2 = Image.fromarray((batch_colors[0,1,:,:,:].cpu().numpy() * 255).astype(np.uint8))
+                im2.save('/home/maturk/git/ObjectReconstructor/delete/im2.png')
+                im3 = Image.fromarray((batch_colors[1,14,:,:,:].cpu().numpy() * 255).astype(np.uint8))
+                im3.save('/home/maturk/git/ObjectReconstructor/delete/im3.png')
+                im4 = Image.fromarray((batch_colors[1,15,:,:,:].cpu().numpy() * 255).astype(np.uint8))
+                im4.save('/home/maturk/git/ObjectReconstructor/delete/im4.png')
+                
+                #if self.fusion:
+                #    batch_colors = data['colors'].clone().detach().to(device=self.device, dtype= torch.float32)
+                #    batch_masks = data['masks'].clone().detach().to(device=self.device, dtype= torch.int64)
+                #    embedding, pc_out = model(colors = batch_colors, xyzs = batch_depths, masks = batch_masks)
+                #else: embedding, pc_out = model(batch_depths)
+                #
+                #chamfer_loss = chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))[0]
+                #cont_loss = contrastive_loss(embedding,data['class_dir'])
+                #loss = chamfer_loss + cont_loss
+                #loss.backward()
+                #optimizer.step() 
+                #
+                #if batch_idx % 1 == 0:
+                #    print('Epoch: ', epoch, 'Batch idx: ', batch_idx)
+                #    print('Loss: ', loss)
+                #    print('Chamfer loss: ', chamfer_loss, 'contrastive loss: ', cont_loss)
+                #    writer.add_scalar("Loss / train", loss, epoch)
+                #    writer.add_scalar("Chamfer Loss / train", chamfer_loss, epoch)
+                #    writer.add_scalar("Contrastive Loss / train", cont_loss, epoch)
+                #    writer.add_scalar("Lr", scheduler.get_last_lr()[0], epoch)
+                #if epoch % 500 == 0 and epoch!=0:
+                #    torch.save(model.state_dict(), f"{self.results_dir}/models/views_{self.num_views}_points_{self.num_points}_emb_dim_{self.emb_dim}_epoch_{epoch}.pth")    
+                #batch_idx += 1
+                
+            if self.eval:
+                print(f"Epoch {epoch} finished, evaluating ... ") 
+                model.eval()
+                val_loss = 0.0
+                for i, data in enumerate(eval_dataloader, 1):
+                    xyzs = []
+                    batch_colors = data['colors']
+                    batch_depths = data['depths']
+                    for point_cloud in batch_depths:
+                        xyzs.append(point_cloud)
+                    xyzs = torch.cat(xyzs).to(device = self.device , dtype = torch.float)
+                    batch_nums = int(xyzs.shape[0]/(self.num_views-1))
+                    xyzs = torch.reshape(xyzs, (batch_nums, self.num_views - 1, self.num_points, 3))
+                    with torch.cuda.amp.autocast(enabled=True):
+                        embedding, pc_out = model(xyzs)
+                        loss, _= chamfer_distance(pc_out, data['gt_pc'].permute(0,2,1).to(self.device))
+                    val_loss += loss.mean().item()
+                    if i % 20 == 0:
+                        print(f"Batch {i} Loss: {loss}")
+                val_loss = val_loss / i
+                print(f"Epoch {epoch} test average loss: {val_loss}")
+                print(f">>>>>>>>----------Epoch {epoch} eval test finish---------<<<<<<<<")
+            
     
     def train_one_object(self, model, object):
             model.train()
@@ -171,10 +203,11 @@ class Trainer():
 
 def main():
     opt = parser.parse_args() 
-    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test', num_points=opt.num_points)
+    dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/train_test_split/train', num_points=opt.num_points, num_views=opt.num_views)
     train_split = int(0.80 * dataset.__len__())
-
     train_dataset, eval_dataset = random_split(dataset, [train_split, dataset.__len__()-train_split])
+    print('Current train and eval split: ', train_dataset.__len__(), eval_dataset.__len__()) 
+    
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
                                                    batch_size=opt.batch_size,
                                                    num_workers=opt.workers,
@@ -183,12 +216,21 @@ def main():
                                                    batch_size=opt.batch_size,
                                                    num_workers=opt.workers,
                                                    shuffle = False)
-    encoder = PointCloudAE(emb_dim = opt.emb_dim, num_pts= opt.num_points).to(opt.device)
+    if opt.fusion == True:
+        print('Using Fusion Voxel Auto-Encoder network')
+        model = PointFusionAE(emb_dim = opt.emb_dim, num_points= opt.num_points).to(opt.device)
+    else:
+        print('Using PointNet (Depth only) Voxel Auto-Encoder network')
+        model = PointCloudAE(emb_dim = opt.emb_dim, num_points= opt.num_points).to(opt.device)
+        
+    model= torch.nn.DataParallel(model)
+    model.to(opt.device)
+        
     if opt.load_model != '':
-        encoder.load_state_dict(torch.load(opt.load_model))
+        model.load_state_dict(torch.load(opt.load_model))
 
-    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
-    trainer.train(encoder, train_dataloader, eval_dataloader)
+    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points, opt.log_dir, opt.emb_dim, opt.fusion)
+    trainer.train(model, train_dataloader, eval_dataloader)
 
 def test():
     import os
@@ -232,7 +274,7 @@ def train_one_object():
     dataset = BlenderDataset(mode = 'train', save_directory  = '/home/maturk/data/test2', num_points=opt.num_points)
     object = dataset.__getitem__(0)
     encoder = PointCloudAE(emb_dim = opt.emb_dim, num_pts= opt.num_points).to(opt.device)
-    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
+    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points, opt.log_dir, opt.emb_dim, opt.fusion)
     trainer.train_one_object(encoder, object)
 
     depths = object['depths']
@@ -264,7 +306,7 @@ def train_two_objects():
     if LOAD_MODEL == True:
         model.load_state_dict(torch.load(os.path.join(opt.result_dir,'double_PC_encoder_16_1028_2000.pth')))
 
-    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points)
+    trainer = Trainer(opt.epochs, opt.device, opt.lr, opt.load_model, opt.result_dir, opt.batch_size, opt.num_views, opt.num_points, opt.fusion)
     trainer.train_two_objects(model, object1=object1, object2=object2)
 
 def test_two_objects():
@@ -310,9 +352,6 @@ def test_two_objects():
     draw_registration_result(pcd_out, pcd_gt, np.identity(4))
 
 if __name__ == "__main__":
-    #main()
+    main()
     #test()
-    #train_one_object()
-    #train_two_objects()
-    test_two_objects()
   
