@@ -7,8 +7,8 @@ import numpy as np
 import open3d as o3d
 import json
 from scipy.spatial.transform import Rotation 
-from ObjectReconstructor.utils import pc_local_to_pc_global, pc_to_dmap, blender_dataset_to_ngp_pl
-from ObjectReconstructor.configs import *
+from utils import pc_local_to_pc_global, pc_to_dmap, blender_dataset_to_ngp_pl
+from configs import *
 
 
 class BlenderDataset(torch.utils.data.Dataset):
@@ -86,7 +86,7 @@ class BlenderDataset(torch.utils.data.Dataset):
             'masks'   : torch.tensor(np.array(masks), dtype=torch.float32),
             'class_dir' : object['class_dir'],
             'object_dir' : object['object_dir'],
-            'poses' : torch.tensor(np.array(poses), dtype=torch.float32)
+            'poses' : torch.tensor(np.array(poses[0:self.num_views]), dtype=torch.float32)
         }
         
     def __len__(self):
