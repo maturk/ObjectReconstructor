@@ -4,23 +4,34 @@ import glob
 import numpy as np
 import open3d as o3d
 import json
-
 from scipy.spatial.transform import Rotation 
 from configs import VOXEL_OCCUPANCY_TRESHOLD, VOXEL_RESOLUTION, VOXEL_SIZE, CUBIC_SIZE, GRID_MAX, GRID_MIN
 
 
-
-def voxel_to_pc(voxel):
-    voxel = voxel.sigmoid()
+def voxel_to_pc(voxel, tresh = VOXEL_OCCUPANCY_TRESHOLD, voxel_size = VOXEL_SIZE, cubic_size = CUBIC_SIZE):
+    # Grid of normalized logits (after sigmoid activation) to point cloud
     out = []
     for i in range(voxel.shape[0]):
-        indices = (voxel[i,:] >= 0.5).nonzero(as_tuple=False)
+        indices = (voxel[i,:] >= tresh).nonzero(as_tuple=False)
         if indices.nelement() == 0:
             points = torch.zeros((1,3))
         else:
-            points = VOXEL_SIZE * indices[:,:] - CUBIC_SIZE / 2
+            points = voxel_size * (indices[:,:] + voxel_size/2 ) - cubic_size / 2
         out.append(points)
     return out
+
+
+def voxel_IoU(voxel, gt):
+    # Voxel IoU: 
+    preds_occupy = voxel[0, :, :, :] >= VOXEL_OCCUPANCY_TRESHOLD
+    diff = np.sum(np.logical_xor(preds_occupy, gt[0, :, :, :]))
+    intersection = np.sum(np.logical_and(preds_occupy, gt[0, :, :, :]))
+    union = np.sum(np.logical_or(preds_occupy, gt[0, :, :, :]))
+    IoU = intersection/union
+    num_fp = np.sum(np.logical_and(preds_occupy, gt[0, :, :, :]))  # false positive
+    num_fn = np.sum(np.logical_and(np.logical_not(preds_occupy), gt[0, :, :, :]))  # false negative
+    return IoU
+
 
 def pc_local_to_pc_global(pc, K, pose, blender_pre_rotation = True):
     """ Transform local point cloud into global frame
@@ -221,8 +232,8 @@ def blender_dataset_to_ngp_pl(save_directory):
                                     file = pose_path +'/' + prefix + '000' + str(number) + ".txt"
                                 np.savetxt(file,pose)
 
-                               
-def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
+
+def pytorch3d_vis(grid, view_elev = 0.0, distance = 1.5, thresh = VOXEL_OCCUPANCY_TRESHOLD, R= None, T=None):
     ''' Pytorch3D visualizer for untextured voxel grids
     
     Args:
@@ -239,6 +250,7 @@ def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
     from pytorch3d.vis.texture_vis import texturesuv_image_matplotlib
     from pytorch3d.renderer import (
         look_at_view_transform,
+        look_at_rotation,
         FoVPerspectiveCameras, 
         PointLights, 
         RasterizationSettings, 
@@ -250,7 +262,14 @@ def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
     mesh = cubify(grid, thresh=thresh) # voxel to mesh
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    R, T = look_at_view_transform(1.5, view_elev, 180) 
+    if T==None:
+        R, T = look_at_view_transform(distance, view_elev, 180) 
+        #T = torch.Tensor([[-0.0000e+00, 2.9802e-08, 1.5000e+00]])
+    else: 
+        #T = torch.Tensor([[-0.0000e+00, 2.9802e-08, 1.5000e+00]])
+        #T = torch.Tensor([[0, 0.2, 1]]) # ()
+        #R = look_at_rotation(T, up=((0, 1, 0),), at=((0, 0, 0),))
+        R = torch.inverse(R)
     cameras = FoVPerspectiveCameras(device=device, R=R, T=T)
     raster_settings = RasterizationSettings(
         image_size=512, 
@@ -284,4 +303,4 @@ def pytorch3d_vis(grid, view_elev = 0.0, thresh = VOXEL_OCCUPANCY_TRESHOLD):
     return images
 
 if __name__ == "__main__":
-    pass
+    shapenet_pc_sample(shapenet_directory = '/home/maturk/data/single_category_cups', save_directory = '/home/maturk/git/ObjectReconstructor/data/single_category_train_test_split', sample_points = 2048)
