@@ -22,6 +22,18 @@ It might also be necessary to update your python path in the cluster using:
 export PYTHONPATH="${PYTHONPATH}:/cluster/home/path-to-ObjectReconstructor/"
 ```
 
+### SLURM Nodes
+
+Launching an interactive session with 6 NVIDIA RTX 2080 GPU's for 120 hours:
+```
+srun --ntasks 6      --time=120:00:00      --mem-per-cpu=5G      --tmp=10G      --gpus rtx_2080:6      --pty bash
+```
+
+Connectiong to an existing node session (job ID found with squeue command): 
+```
+srun --interactive --pty --jobid=5931976 $SHELL
+```
+
 ## Notes
 Some libraries might be difficult to install on the cluster (pip/conda). The following have been tested:
 ###  
@@ -29,4 +41,5 @@ Some libraries might be difficult to install on the cluster (pip/conda). The fol
 ```
 pip install "git+https://github.com/facebookresearch/pytorch3d.git"
 ```
+
 
