@@ -33,6 +33,23 @@ def voxel_IoU(voxel, gt):
     return IoU
 
 
+def pc_down_sample(pc, num_points):
+        xyz = pc
+        num_xyz = pc.shape[0]
+        if num_xyz >= num_points:
+            idxs = np.random.choice(num_xyz, num_points)
+            xyz = xyz[idxs, :]
+        else:
+            # if not enough points to downsample, randomly repeat points in input PC
+            rem = num_points - num_xyz
+            rem_idx = np.random.choice(num_xyz, rem)
+            xyz_rem = xyz[rem_idx, :]
+            xyz =  np.concatenate((xyz, xyz_rem), axis=0)
+            idxs = np.random.choice(num_xyz, num_points)
+            xyz = xyz[idxs, :]
+        return xyz, idxs
+
+
 def pc_local_to_pc_global(pc, K, pose, blender_pre_rotation = True):
     """ Transform local point cloud into global frame
 
@@ -120,7 +137,6 @@ def shapenet_pc_sample(shapenet_directory = '/home/maturk/data/Shapenet_small', 
         shapenet_directory (str, optional): ShapeNet model directory (obj and texture files). Defaults to '/home/maturk/data/Shapenet_small'.
         save_directory (str, optional): Save directory. Defaults to '/home/maturk/data/test2'.
         sample_points (int, optional): Number of points to sample for point cloud. Defaults to 2048.
-    TODO:     # Faulty files: # abe557fa1b9d59489c81f0389df0e98a # 194f4eb1707aaf674c8b72e8da0e65c5 # 5979870763de5ced4c8b72e8da0e65c5 # b838c5bc5241a44bf2f2371022475a36 # c50c72eefe225b51cb2a965e75be701c # 9d453384794bc58b9a06a7de97b096dc # 1a0a2715462499fbf9029695a3277412
     """
     counter = 0
     for folder in sorted(os.listdir(shapenet_directory)):
@@ -233,7 +249,7 @@ def blender_dataset_to_ngp_pl(save_directory):
                                 np.savetxt(file,pose)
 
 
-def pytorch3d_vis(grid, view_elev = 0.0, distance = 1.5, thresh = VOXEL_OCCUPANCY_TRESHOLD, R= None, T=None):
+def pytorch3d_vis(grid, view_elev = 0.0, distance = 1.5, thresh = VOXEL_OCCUPANCY_TRESHOLD, R= None, T=None, azimuth = 180):
     ''' Pytorch3D visualizer for untextured voxel grids
     
     Args:
@@ -263,12 +279,9 @@ def pytorch3d_vis(grid, view_elev = 0.0, distance = 1.5, thresh = VOXEL_OCCUPANC
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if T==None:
-        R, T = look_at_view_transform(distance, view_elev, 180) 
-        #T = torch.Tensor([[-0.0000e+00, 2.9802e-08, 1.5000e+00]])
+        R, T = look_at_view_transform(distance, view_elev, azimuth) 
     else: 
-        #T = torch.Tensor([[-0.0000e+00, 2.9802e-08, 1.5000e+00]])
-        #T = torch.Tensor([[0, 0.2, 1]]) # ()
-        #R = look_at_rotation(T, up=((0, 1, 0),), at=((0, 0, 0),))
+        R = look_at_rotation(T, up=((0, 1, 0),), at=((0, 0, 0),))
         R = torch.inverse(R)
     cameras = FoVPerspectiveCameras(device=device, R=R, T=T)
     raster_settings = RasterizationSettings(
