@@ -1,6 +1,6 @@
 # ObjectReconstructor
 
-Object shape reconstruction from RGB-D images. Auto-encoder trained on multi-view RGB-D images with pointcloud and voxel grid shape predictors.
+Object shape reconstruction from synthetic RGB-D images. Auto-encoder trained on multi-view RGB-D images with pointcloud and voxel grid shape predictors.
 
 ## Features
 * [x] Multi-view/single-view encoder support for both training and inference time.
@@ -18,22 +18,8 @@ conda create -n obre python=3.8
 conda activate obre
 conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
 
-pushd ./ObjectReconstructor
+cd ./ObjectReconstructor
 pip install -r requirements.txt
-```
-
-Follow [ngp_pl](https://github.com/kwea123/ngp_pl) installation instructions. The following method has been tested.
-```
-pushd ./ngp_pl
-pip install torch-scatter==2.0.6
-pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
-
-git clone https://github.com/NVIDIA/apex
-pushd apex
-pip install -v --disable-pip-version-check --global-option="--cuda_ext" --no-cache-dir ./ 
-popd
-pip install -r requirements.txt
-popd
 ```
 
 ## Datasets
@@ -64,7 +50,19 @@ Tested on Blender version 2.93.9. Note, Blender version <3.0 required. To create
 I provide training scripts to train auto-encoders for both RGB-D or Depth only channels. RGB-D training works with a modified [Dense-Fusion](https://github.com/j96w/DenseFusion) architecture that uses both color and depth channels to create an embedding vector. Multiple-views of the same object are fused into one embedding. Depth only training works with a PointNet encoder. Point cloud and voxel grid decoders are simple MLPs.
 
 ## Results
-### Voxel results
-Ground truth vs predicted:
+### Voxel Depth Only Autoencoder
+The following results were obtained with the depth only voxel grid autoencoder as shown in the architecure diagram:
 
-Work in progress...
+<img width="600" alt="table_res"  src ="https://user-images.githubusercontent.com/30566358/214982861-29b94212-badf-487f-8b47-334877a2c83e.png" >
+<img width="600" alt="table_res" src="https://user-images.githubusercontent.com/30566358/214982418-c3c95ee1-7103-4380-ab95-769a1f096714.png">
+
+For more qualitative results see: https://maturk.github.io/projects/object_reconstruction.html
+
+
+
+
+
+
+
+
+
