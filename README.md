@@ -56,7 +56,7 @@ The following results were obtained with the depth only voxel grid autoencoder a
 <img width="600" alt="table_res"  src ="https://user-images.githubusercontent.com/30566358/214982861-29b94212-badf-487f-8b47-334877a2c83e.png" >
 <img width="600" alt="table_res" src="https://user-images.githubusercontent.com/30566358/214982418-c3c95ee1-7103-4380-ab95-769a1f096714.png">
 
-For more qualitative results see: https://maturk.github.io/projects/object_reconstruction.html
+For more qualitative results see: [Project Page](https://maturk.github.io/projects/object_reconstruction.html)
 
 
 
